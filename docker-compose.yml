@@ -6,6 +6,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: dev
     container_name: containrdog
     restart: unless-stopped
     develop:
@@ -13,8 +14,6 @@ services:
         - action: sync
           path: ./src
           target: /app/src
-          ignore:
-            - node_modules/
         - action: rebuild
           path: ./package.json
     # Mount Docker socket and credentials

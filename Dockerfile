@@ -28,7 +28,6 @@ RUN apk add --no-cache \
     curl \
     docker-cli \
     podman \
-    aws-cli \
     git \
     make \
     && rm -rf /var/cache/apk/*

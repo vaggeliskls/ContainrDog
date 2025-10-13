@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  containrdog:
+    image: ghcr.io/vaggeliskls/containrdog:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: containrdog
+    restart: unless-stopped
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+          ignore:
+            - node_modules/
+        - action: rebuild
+          path: ./package.json
+    # Mount Docker socket and credentials
+    volumes:
+      # Docker socket (required)
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # Docker config for registry authentication (optional)
+      # Replace <PATH_TO_HOME_DIR> with your actual home directory
+      # - <PATH_TO_HOME_DIR>/.docker/config.json:/config.json:ro
+
+      # For Podman (uncomment if using Podman instead of Docker)
+      # - /run/podman/podman.sock:/var/run/docker.sock
+
+    environment:
+      # Check interval (supports: "5s", "5m", or "5" for minutes)
+      - INTERVAL=5s
+
+      # Only monitor containers with specific label (default: true)
+      - LABELED=true
+
+      # Label name to check for when LABELED=true
+      - LABEL=containrdog-enabled
+
+      # Global update policy (default: major)
+      # Options: all, major, minor, patch, force, glob
+      # Can be overridden per container with containrdog.policy label
+      - POLICY=major
+
+      # For glob policy: specify pattern
+      # - GLOB_PATTERN=1.2*
+
+      # For force policy: match only same tag
+      # - MATCH_TAG=true
+
+      # Auto-update containers when new versions are found (default: true)
+      # Set to false to only detect and log updates without taking action
+      - AUTO_UPDATE=true
+
+      # Custom socket path (optional, auto-detected)
+      # - SOCKET_PATH=/var/run/docker.sock
+
+      # Log level: error, warn, info, debug (default: info)
+      - LOG_LEVEL=info
+
+      # Global custom commands (optional - JSON array)
+      # Available environment variables: CONTAINER_ID, CONTAINER_NAME, CURRENT_IMAGE,
+      # CURRENT_TAG, AVAILABLE_IMAGE, AVAILABLE_TAG, UPDATE_TYPE
+      # - UPDATE_COMMANDS=["echo 'Update found for $CONTAINER_NAME: $CURRENT_TAG -> $AVAILABLE_TAG'"]
+
+    labels:
+      # Prevent self-monitoring
+      - containrdog-enabled=false
+
+  # Example: A monitored container with major policy and auto-update enabled
+  nginx-example:
+    image: nginx:1.25
+    container_name: nginx-example
+    restart: unless-stopped
+    ports:
+      - '8080:80'
+    labels:
+      # Enable monitoring for this container (when LABELED=true)
+      - containrdog-enabled=true
+
+      # Update policy: all, major, minor, patch, force, glob (default: uses global POLICY)
+      # - containrdog.policy=major
+
+      # Auto-update this container (default: uses global AUTO_UPDATE)
+      - containrdog.auto-update=true
+
+      # Per-container custom commands (optional - overrides global UPDATE_COMMANDS)
+      # - containrdog.update-commands=["echo 'Updating $CONTAINER_NAME'", "curl -X POST https://hooks.slack.com/..."]
+
+      # For glob policy, specify pattern (e.g., 1.2*)
+      - containrdog.glob-pattern=1.2*
+
+      # For force policy with match-tag
+      # - containrdog.match-tag=true

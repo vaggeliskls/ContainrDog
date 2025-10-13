@@ -116,16 +116,6 @@ export class MonitorService {
       const autoUpdateEnabled =
         container.autoUpdate !== undefined ? container.autoUpdate : config.autoUpdate;
 
-      // Determine which commands to use (container-specific or global)
-      const updateCommands = container.updateCommands || config.updateCommands;
-
-      // If custom commands are specified, execute them
-      if (updateCommands && updateCommands.length > 0) {
-        logger.info(`💻 Executing custom update commands for ${container.name}`);
-        await this.commandExecutor.executeUpdateCommands(update, updateCommands);
-        return;
-      }
-
       // If auto-update is enabled, pull and recreate container
       if (autoUpdateEnabled) {
         logger.info(`   Action:    Auto-updating...`);
@@ -142,6 +132,10 @@ export class MonitorService {
   private async autoUpdateContainer(update: ImageUpdateInfo): Promise<void> {
     const container = update.container;
     const newImageName = ImageParser.toString(update.availableImage);
+    const config = getConfig();
+
+    // Determine which commands to use (container-specific or global)
+    const updateCommands = container.updateCommands || config.updateCommands;
 
     try {
       // Pull the new image
@@ -153,6 +147,12 @@ export class MonitorService {
       await this.dockerClient.recreateContainer(container.id, newImageName);
 
       logger.info(`   ✅ Successfully updated to ${update.availableImage.tag}`);
+
+      // Execute custom commands AFTER successful update
+      if (updateCommands && updateCommands.length > 0) {
+        logger.info(`   💻 Executing post-update commands...`);
+        await this.commandExecutor.executeUpdateCommands(update, updateCommands);
+      }
 
       // Send success webhook notification
       if (this.webhookService) {

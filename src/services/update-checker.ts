@@ -32,9 +32,7 @@ export class UpdateChecker {
     return updates;
   }
 
-  private async checkContainerUpdate(
-    container: ContainerInfo
-  ): Promise<ImageUpdateInfo | null> {
+  private async checkContainerUpdate(container: ContainerInfo): Promise<ImageUpdateInfo | null> {
     const config = getConfig();
     const currentImage = ImageParser.parse(container.image);
 
@@ -43,7 +41,9 @@ export class UpdateChecker {
     const matchTag = container.matchTag !== undefined ? container.matchTag : config.matchTag;
     const globPattern = container.globPattern || config.globPattern;
 
-    logger.debug(`Checking updates for ${container.name} (${container.image}) with policy: ${policy}`);
+    logger.debug(
+      `Checking update for ${container.name} (${container.image}) with policy: ${policy}`
+    );
 
     // Force policy: always check digest, even for non-semver tags
     if (policy === UpdatePolicy.FORCE) {
@@ -99,7 +99,12 @@ export class UpdateChecker {
       }
 
       // Find the best matching update based on policy
-      const newerVersion = this.findBestUpdate(currentVersion.version, semverTags, policy, globPattern);
+      const newerVersion = this.findBestUpdate(
+        currentVersion.version,
+        semverTags,
+        policy,
+        globPattern
+      );
 
       if (newerVersion) {
         logger.info(
@@ -185,10 +190,7 @@ export class UpdateChecker {
   private matchesGlob(tag: string, pattern: string): boolean {
     // Convert glob pattern to regex
     // Simple implementation: * matches any characters, ? matches single character
-    const regexPattern = pattern
-      .replace(/\./g, '\\.')
-      .replace(/\*/g, '.*')
-      .replace(/\?/g, '.');
+    const regexPattern = pattern.replace(/\./g, '\\.').replace(/\*/g, '.*').replace(/\?/g, '.');
 
     const regex = new RegExp(`^${regexPattern}$`);
     return regex.test(tag);

@@ -29,10 +29,7 @@ export class RegistryService {
     return this.credentials.get(registry);
   }
 
-  private async getAuthToken(
-    registry: string,
-    repository: string
-  ): Promise<string | undefined> {
+  private async getAuthToken(registry: string, repository: string): Promise<string | undefined> {
     const creds = this.getCredentials(registry);
 
     try {

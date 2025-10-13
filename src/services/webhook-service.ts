@@ -38,10 +38,7 @@ export class WebhookService {
     }
   }
 
-  async sendCheckNotification(
-    containersChecked: number,
-    updatesFound: number
-  ): Promise<void> {
+  async sendCheckNotification(containersChecked: number, updatesFound: number): Promise<void> {
     try {
       if (!this.config.notifyOnCheck) {
         return;
@@ -55,11 +52,7 @@ export class WebhookService {
     }
   }
 
-  private buildPayload(
-    update: ImageUpdateInfo,
-    success: boolean,
-    error?: string
-  ): any {
+  private buildPayload(update: ImageUpdateInfo, success: boolean, error?: string): any {
     const container = update.container;
     const status = success ? 'Success' : 'Failed';
     const emoji = success ? '✅' : '❌';

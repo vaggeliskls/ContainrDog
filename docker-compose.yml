@@ -65,6 +65,21 @@ services:
       # CURRENT_TAG, AVAILABLE_IMAGE, AVAILABLE_TAG, UPDATE_TYPE
       # - UPDATE_COMMANDS=["echo 'Update found for $CONTAINER_NAME: $CURRENT_TAG -> $AVAILABLE_TAG'"]
 
+      # Webhook notifications (optional)
+      # Enable webhook notifications
+      # - WEBHOOK_ENABLED=true
+
+      # Webhook URL (required if webhooks enabled)
+      # - WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+
+      # Webhook provider: slack, discord, teams, generic (default: generic)
+      # - WEBHOOK_PROVIDER=slack
+
+      # Notification preferences (all default to their shown values)
+      # - WEBHOOK_NOTIFY_SUCCESS=true    # Notify when update succeeds
+      # - WEBHOOK_NOTIFY_FAILURE=true    # Notify when update fails
+      # - WEBHOOK_NOTIFY_CHECK=false     # Notify on every check cycle
+
     labels:
       # Prevent self-monitoring
       - containrdog-enabled=false

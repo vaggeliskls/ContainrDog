@@ -2,6 +2,7 @@ import { DockerClient } from './docker-client';
 import { RegistryService } from './registry-service';
 import { UpdateChecker } from './update-checker';
 import { CommandExecutor } from '../utils/command-executor';
+import { WebhookService } from './webhook-service';
 import { logger } from '../utils/logger';
 import { getConfig } from '../utils/config';
 import { ImageUpdateInfo } from '../types';
@@ -12,12 +13,20 @@ export class MonitorService {
   private registryService: RegistryService;
   private updateChecker: UpdateChecker;
   private commandExecutor: CommandExecutor;
+  private webhookService?: WebhookService;
 
   constructor() {
     this.dockerClient = new DockerClient();
     this.registryService = new RegistryService();
     this.updateChecker = new UpdateChecker(this.registryService, this.dockerClient);
     this.commandExecutor = new CommandExecutor();
+
+    // Initialize webhook service if configured
+    const config = getConfig();
+    if (config.webhook?.enabled) {
+      this.webhookService = new WebhookService(config.webhook);
+      logger.info('🔔 Webhook notifications enabled');
+    }
   }
 
   async initialize(): Promise<boolean> {
@@ -65,6 +74,11 @@ export class MonitorService {
       if (updates.length === 0) {
         logger.info('✅ All containers are up to date!');
         logger.info('═══════════════════════════════════════════════════════════════');
+
+        // Send webhook notification for check
+        if (this.webhookService) {
+          await this.webhookService.sendCheckNotification(containers.length, 0);
+        }
         return;
       }
 
@@ -78,6 +92,11 @@ export class MonitorService {
       }
 
       logger.info('═══════════════════════════════════════════════════════════════');
+
+      // Send webhook notification for check
+      if (this.webhookService) {
+        await this.webhookService.sendCheckNotification(containers.length, updates.length);
+      }
     } catch (error) {
       logger.error('❌ Error during update check:', error);
     }
@@ -134,8 +153,23 @@ export class MonitorService {
       await this.dockerClient.recreateContainer(container.id, newImageName);
 
       logger.info(`   ✅ Successfully updated to ${update.availableImage.tag}`);
+
+      // Send success webhook notification
+      if (this.webhookService) {
+        await this.webhookService.sendUpdateNotification(update, true);
+      }
     } catch (error) {
       logger.error(`   ❌ Auto-update failed: ${error}`);
+
+      // Send failure webhook notification
+      if (this.webhookService) {
+        await this.webhookService.sendUpdateNotification(
+          update,
+          false,
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+
       throw error;
     }
   }

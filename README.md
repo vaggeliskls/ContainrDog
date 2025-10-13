@@ -80,6 +80,12 @@ All configuration is done via environment variables:
 | `LOG_LEVEL` | Logging level | `info` | `debug`, `warn`, `error` |
 | `REGISTRY_CREDENTIALS` | Private registry credentials (JSON) | - | See below |
 | `UPDATE_COMMANDS` | Custom commands to run on update (JSON array) | - | See below |
+| `WEBHOOK_ENABLED` | Enable webhook notifications | `false` | `true` |
+| `WEBHOOK_URL` | Webhook URL (required if enabled) | - | `https://hooks.slack.com/...` |
+| `WEBHOOK_PROVIDER` | Webhook provider type | `generic` | `slack`, `discord`, `teams`, `generic` |
+| `WEBHOOK_NOTIFY_SUCCESS` | Notify on successful updates | `true` | `false` |
+| `WEBHOOK_NOTIFY_FAILURE` | Notify on failed updates | `true` | `false` |
+| `WEBHOOK_NOTIFY_CHECK` | Notify on every check cycle | `false` | `true` |
 
 ### Registry Credentials
 
@@ -140,6 +146,82 @@ UPDATE_COMMANDS='[
   "docker rm $CONTAINER_ID",
   "docker run -d --name $CONTAINER_NAME $AVAILABLE_IMAGE"
 ]'
+```
+
+### Webhook Notifications
+
+ContainrDog can send notifications to various webhook providers when updates are detected or applied.
+
+**Supported Providers:**
+- **Slack** - Rich formatted messages with attachments
+- **Discord** - Embedded messages with colors
+- **Microsoft Teams** - Adaptive card format
+- **Generic** - JSON payload for custom integrations
+
+**Configuration:**
+
+```yaml
+environment:
+  # Enable webhooks
+  - WEBHOOK_ENABLED=true
+
+  # Webhook URL (get this from your provider)
+  - WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+
+  # Provider type (optional, auto-detects from URL)
+  - WEBHOOK_PROVIDER=slack
+
+  # Notification preferences (optional)
+  - WEBHOOK_NOTIFY_SUCCESS=true   # Notify on successful updates (default: true)
+  - WEBHOOK_NOTIFY_FAILURE=true   # Notify on failed updates (default: true)
+  - WEBHOOK_NOTIFY_CHECK=false    # Notify on every check (default: false)
+```
+
+**Example: Slack Webhook**
+```yaml
+environment:
+  - WEBHOOK_ENABLED=true
+  - WEBHOOK_URL=https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXX
+  - WEBHOOK_PROVIDER=slack
+```
+
+**Example: Discord Webhook**
+```yaml
+environment:
+  - WEBHOOK_ENABLED=true
+  - WEBHOOK_URL=https://discord.com/api/webhooks/123456789/abcdefghijklmnop
+  - WEBHOOK_PROVIDER=discord
+```
+
+**Example: Microsoft Teams Webhook**
+```yaml
+environment:
+  - WEBHOOK_ENABLED=true
+  - WEBHOOK_URL=https://outlook.office.com/webhook/...
+  - WEBHOOK_PROVIDER=teams
+```
+
+**Generic Webhook Payload Format:**
+
+When using `WEBHOOK_PROVIDER=generic`, ContainrDog sends a JSON payload:
+
+```json
+{
+  "event": "container_update",
+  "status": "success",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "container": {
+    "id": "abc123...",
+    "name": "nginx-app",
+    "image": "nginx:1.25"
+  },
+  "update": {
+    "currentTag": "1.25",
+    "newTag": "1.26",
+    "updateType": "semantic_version"
+  },
+  "error": null
+}
 ```
 
 ## Auto-Update Behavior

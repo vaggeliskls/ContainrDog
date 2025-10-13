@@ -7,6 +7,22 @@ export enum UpdatePolicy {
   GLOB = 'glob',
 }
 
+export enum WebhookProvider {
+  SLACK = 'slack',
+  DISCORD = 'discord',
+  TEAMS = 'teams',
+  GENERIC = 'generic',
+}
+
+export interface WebhookConfig {
+  enabled: boolean;
+  provider: WebhookProvider;
+  url: string;
+  notifyOnSuccess?: boolean; // Notify when update succeeds (default: true)
+  notifyOnFailure?: boolean; // Notify when update fails (default: true)
+  notifyOnCheck?: boolean; // Notify on every check (default: false)
+}
+
 export interface Config {
   interval: number; // in milliseconds
   labeledOnly: boolean;
@@ -19,6 +35,7 @@ export interface Config {
   matchTag: boolean; // For force policy: only update if same tag
   globPattern?: string; // For glob policy
   autoUpdate: boolean; // Global auto-update setting
+  webhook?: WebhookConfig; // Webhook notifications
 }
 
 export interface RegistryCredentials {

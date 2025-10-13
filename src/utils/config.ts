@@ -1,4 +1,4 @@
-import { Config, RegistryCredentials, UpdatePolicy } from '../types';
+import { Config, RegistryCredentials, UpdatePolicy, WebhookConfig, WebhookProvider } from '../types';
 import { readFileSync, existsSync } from 'fs';
 
 export class ConfigManager {
@@ -52,6 +52,9 @@ export class ConfigManager {
     // Auto-update (default: true)
     const autoUpdate = process.env.AUTO_UPDATE !== 'false';
 
+    // Webhook configuration
+    const webhook = this.parseWebhookConfig();
+
     return {
       interval,
       labeledOnly,
@@ -64,6 +67,7 @@ export class ConfigManager {
       matchTag,
       globPattern,
       autoUpdate,
+      webhook,
     };
   }
 
@@ -210,6 +214,48 @@ export class ConfigManager {
       console.error('Failed to parse UPDATE_COMMANDS:', error);
       return undefined;
     }
+  }
+
+  private parseWebhookConfig(): WebhookConfig | undefined {
+    const enabled = process.env.WEBHOOK_ENABLED === 'true';
+    const url = process.env.WEBHOOK_URL;
+
+    if (!enabled || !url) {
+      return undefined;
+    }
+
+    // Parse provider (default: generic)
+    let provider = WebhookProvider.GENERIC;
+    const providerStr = process.env.WEBHOOK_PROVIDER?.toLowerCase();
+
+    switch (providerStr) {
+      case 'slack':
+        provider = WebhookProvider.SLACK;
+        break;
+      case 'discord':
+        provider = WebhookProvider.DISCORD;
+        break;
+      case 'teams':
+      case 'msteams':
+        provider = WebhookProvider.TEAMS;
+        break;
+      default:
+        provider = WebhookProvider.GENERIC;
+    }
+
+    // Parse notification preferences (defaults)
+    const notifyOnSuccess = process.env.WEBHOOK_NOTIFY_SUCCESS !== 'false'; // default: true
+    const notifyOnFailure = process.env.WEBHOOK_NOTIFY_FAILURE !== 'false'; // default: true
+    const notifyOnCheck = process.env.WEBHOOK_NOTIFY_CHECK === 'true'; // default: false
+
+    return {
+      enabled,
+      provider,
+      url,
+      notifyOnSuccess,
+      notifyOnFailure,
+      notifyOnCheck,
+    };
   }
 
   public getConfig(): Config {

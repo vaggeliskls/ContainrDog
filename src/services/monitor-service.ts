@@ -51,30 +51,18 @@ export class MonitorService {
   async runCheck(): Promise<void> {
     try {
       const config = getConfig();
-      logger.info('═══════════════════════════════════════════════════════════════');
-      logger.info('🔍 Starting container update check...');
-      logger.info('═══════════════════════════════════════════════════════════════');
 
       // Get all running containers (filtered by label if configured)
       const containers = await this.dockerClient.getRunningContainers();
 
       if (containers.length === 0) {
-        logger.info('ℹ️  No containers to monitor');
-        logger.info('═══════════════════════════════════════════════════════════════');
         return;
       }
-
-      logger.info(`📦 Monitoring ${containers.length} container(s)`);
-      logger.info('───────────────────────────────────────────────────────────────');
 
       // Check for updates
       const updates = await this.updateChecker.checkForUpdates(containers);
 
-      logger.info('───────────────────────────────────────────────────────────────');
       if (updates.length === 0) {
-        logger.info('✅ All containers are up to date!');
-        logger.info('═══════════════════════════════════════════════════════════════');
-
         // Send webhook notification for check
         if (this.webhookService) {
           await this.webhookService.sendCheckNotification(containers.length, 0);
@@ -82,8 +70,10 @@ export class MonitorService {
         return;
       }
 
+      // Show logs when updates are found
+      logger.info('═══════════════════════════════════════════════════════════════');
       logger.info(`🆕 Found ${updates.length} update(s) available`);
-      logger.info('───────────────────────────────────────────────────────────────');
+      logger.info('═══════════════════════════════════════════════════════════════');
 
       // Process each update
       for (const update of updates) {

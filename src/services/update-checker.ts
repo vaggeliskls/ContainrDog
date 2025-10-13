@@ -20,17 +20,12 @@ export class UpdateChecker {
 
     for (const container of containers) {
       try {
-        logger.info(`  🔍 Checking: ${container.name}`);
-        logger.info(`     Image: ${container.image}`);
         const update = await this.checkContainerUpdate(container);
         if (update) {
           updates.push(update);
-          logger.info(`     🆕 Update available!`);
-        } else {
-          logger.info(`     ✅ Up to date`);
         }
       } catch (error) {
-        logger.error(`     ❌ Failed to check updates: ${error}`);
+        logger.error(`❌ Failed to check updates for ${container.name}: ${error}`);
       }
     }
 

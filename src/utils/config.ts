@@ -36,6 +36,8 @@ export class ConfigManager {
 
     // Parse update commands (from file or environment)
     const updateCommands = this.parseUpdateCommands();
+    const preUpdateCommands = this.parsePreUpdateCommands();
+    const postUpdateCommands = this.parsePostUpdateCommands();
 
     // Log level
     const logLevel = process.env.LOG_LEVEL || 'info';
@@ -62,6 +64,8 @@ export class ConfigManager {
       socketPath,
       registryCredentials,
       updateCommands,
+      preUpdateCommands,
+      postUpdateCommands,
       logLevel,
       policy,
       matchTag,
@@ -212,6 +216,54 @@ export class ConfigManager {
       return [commands];
     } catch (error) {
       console.error('Failed to parse UPDATE_COMMANDS:', error);
+      return undefined;
+    }
+  }
+
+  private parsePreUpdateCommands(): string[] | undefined {
+    // Try to read from mounted file first
+    const commandsFile = process.env.PRE_COMMANDS_FILE || '/config/pre-update-commands.json';
+    const fileContent = this.readFileIfExists(commandsFile);
+
+    const commandsJson = fileContent || process.env.PRE_UPDATE_COMMANDS;
+
+    if (!commandsJson) {
+      return undefined;
+    }
+
+    try {
+      const commands = JSON.parse(commandsJson);
+      if (Array.isArray(commands)) {
+        return commands;
+      }
+      // If single command string, wrap in array
+      return [commands];
+    } catch (error) {
+      console.error('Failed to parse PRE_UPDATE_COMMANDS:', error);
+      return undefined;
+    }
+  }
+
+  private parsePostUpdateCommands(): string[] | undefined {
+    // Try to read from mounted file first
+    const commandsFile = process.env.POST_COMMANDS_FILE || '/config/post-update-commands.json';
+    const fileContent = this.readFileIfExists(commandsFile);
+
+    const commandsJson = fileContent || process.env.POST_UPDATE_COMMANDS;
+
+    if (!commandsJson) {
+      return undefined;
+    }
+
+    try {
+      const commands = JSON.parse(commandsJson);
+      if (Array.isArray(commands)) {
+        return commands;
+      }
+      // If single command string, wrap in array
+      return [commands];
+    } catch (error) {
+      console.error('Failed to parse POST_UPDATE_COMMANDS:', error);
       return undefined;
     }
   }

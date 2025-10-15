@@ -62,7 +62,15 @@ services:
       # Global custom commands (optional - JSON array)
       # Available environment variables: CONTAINER_ID, CONTAINER_NAME, CURRENT_IMAGE,
       # CURRENT_TAG, AVAILABLE_IMAGE, AVAILABLE_TAG, UPDATE_TYPE
+
+      # DEPRECATED: Use PRE_UPDATE_COMMANDS and POST_UPDATE_COMMANDS instead
       # - UPDATE_COMMANDS=["echo 'Update found for $CONTAINER_NAME: $CURRENT_TAG -> $AVAILABLE_TAG'"]
+
+      # Pre-update commands: Execute BEFORE pulling and recreating container
+      # - PRE_UPDATE_COMMANDS=["echo 'Starting update for $CONTAINER_NAME'", "docker exec $CONTAINER_NAME /app/backup.sh"]
+
+      # Post-update commands: Execute AFTER successful container update
+      # - POST_UPDATE_COMMANDS=["echo 'Updated $CONTAINER_NAME to $AVAILABLE_TAG'", "docker exec $CONTAINER_NAME /app/healthcheck.sh"]
 
       # Webhook notifications (optional)
       # Enable webhook notifications
@@ -100,8 +108,15 @@ services:
       # Auto-update this container (default: uses global AUTO_UPDATE)
       - containrdog.auto-update=true
 
-      # Per-container custom commands (optional - overrides global UPDATE_COMMANDS)
-      # - containrdog.update-commands=["echo 'Updating $CONTAINER_NAME'", "curl -X POST https://hooks.slack.com/..."]
+      # Per-container custom commands (optional - overrides global commands)
+      # DEPRECATED: Use pre-update-commands and post-update-commands instead
+      # - containrdog.update-commands=["echo 'Updating $CONTAINER_NAME'"]
+
+      # Per-container pre-update commands (runs before update)
+      # - containrdog.pre-update-commands=["echo 'Starting update for $CONTAINER_NAME'"]
+
+      # Per-container post-update commands (runs after successful update)
+      # - containrdog.post-update-commands=["echo 'Updated $CONTAINER_NAME'", "curl -X POST https://hooks.slack.com/..."]
 
       # For glob policy, specify pattern (e.g., 1.2*)
       - containrdog.glob-pattern=1.2*

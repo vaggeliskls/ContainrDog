@@ -29,7 +29,9 @@ export interface Config {
   label: string;
   socketPath: string;
   registryCredentials?: RegistryCredentials[];
-  updateCommands?: string[];
+  updateCommands?: string[]; // Deprecated: use preUpdateCommands and postUpdateCommands
+  preUpdateCommands?: string[]; // Commands to run before update
+  postUpdateCommands?: string[]; // Commands to run after update
   logLevel: string;
   policy: UpdatePolicy;
   matchTag: boolean; // For force policy: only update if same tag
@@ -55,7 +57,9 @@ export interface ContainerInfo {
   matchTag?: boolean;
   globPattern?: string;
   autoUpdate?: boolean;
-  updateCommands?: string[];
+  updateCommands?: string[]; // Deprecated: use preUpdateCommands and postUpdateCommands
+  preUpdateCommands?: string[]; // Commands to run before update
+  postUpdateCommands?: string[]; // Commands to run after update
 }
 
 export interface ImageInfo {

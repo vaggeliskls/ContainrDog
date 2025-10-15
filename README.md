@@ -79,7 +79,9 @@ All configuration is done via environment variables:
 | `SOCKET_PATH` | Custom socket path | `/var/run/docker.sock` | `/run/podman/podman.sock` |
 | `LOG_LEVEL` | Logging level | `info` | `debug`, `warn`, `error` |
 | `REGISTRY_CREDENTIALS` | Private registry credentials (JSON) | - | See below |
-| `UPDATE_COMMANDS` | Custom commands to run on update (JSON array) | - | See below |
+| `UPDATE_COMMANDS` | **Deprecated:** Custom commands to run after update (JSON array) | - | Use `POST_UPDATE_COMMANDS` |
+| `PRE_UPDATE_COMMANDS` | Commands to run before update (JSON array) | - | See below |
+| `POST_UPDATE_COMMANDS` | Commands to run after update (JSON array) | - | See below |
 | `WEBHOOK_ENABLED` | Enable webhook notifications | `false` | `true` |
 | `WEBHOOK_URL` | Webhook URL (required if enabled) | - | `https://hooks.slack.com/...` |
 | `WEBHOOK_PROVIDER` | Webhook provider type | `generic` | `slack`, `discord`, `teams`, `generic` |
@@ -114,9 +116,9 @@ docker login registry.example.com
 REGISTRY_CREDENTIALS='{"registry":"ghcr.io","username":"myuser","password":"ghp_token123"}'
 ```
 
-### Update Commands
+### Pre and Post Update Commands
 
-Execute custom commands when updates are detected. Available environment variables in commands:
+Execute custom commands before and after container updates. Available environment variables in commands:
 
 - `CONTAINER_ID` - Container ID
 - `CONTAINER_NAME` - Container name
@@ -126,26 +128,60 @@ Execute custom commands when updates are detected. Available environment variabl
 - `AVAILABLE_TAG` - New tag
 - `UPDATE_TYPE` - Type of update (semantic_version, digest_change, static_tag)
 
-**Examples:**
+**Pre-Update Commands:**
 
-Log to console:
-```bash
-UPDATE_COMMANDS='["echo Update for $CONTAINER_NAME: $CURRENT_TAG to $AVAILABLE_TAG"]'
-```
+Execute commands BEFORE pulling the new image and recreating the container. Useful for:
+- Backup operations
+- Notifications about starting updates
+- Pre-update health checks
+- Stopping dependent services
 
-Send webhook notification:
 ```bash
-UPDATE_COMMANDS='["curl -X POST https://webhook.site/xxx -d \"Container: $CONTAINER_NAME, Update: $CURRENT_TAG -> $AVAILABLE_TAG\""]'
-```
-
-Pull and restart container:
-```bash
-UPDATE_COMMANDS='[
-  "docker pull $AVAILABLE_IMAGE",
-  "docker stop $CONTAINER_ID",
-  "docker rm $CONTAINER_ID",
-  "docker run -d --name $CONTAINER_NAME $AVAILABLE_IMAGE"
+PRE_UPDATE_COMMANDS='[
+  "echo Starting update for $CONTAINER_NAME from $CURRENT_TAG to $AVAILABLE_TAG",
+  "docker exec $CONTAINER_NAME /app/backup.sh"
 ]'
+```
+
+**Post-Update Commands:**
+
+Execute commands AFTER successfully updating the container. Useful for:
+- Post-update health checks
+- Success notifications
+- Cache clearing
+- Restarting dependent services
+
+```bash
+POST_UPDATE_COMMANDS='[
+  "echo Successfully updated $CONTAINER_NAME to $AVAILABLE_TAG",
+  "docker exec $CONTAINER_NAME /app/healthcheck.sh",
+  "curl -X POST https://webhook.site/xxx -d \"Updated: $CONTAINER_NAME ($CURRENT_TAG -> $AVAILABLE_TAG)\""
+]'
+```
+
+**Combined Example:**
+
+```bash
+# Pre-update: Backup database before update
+PRE_UPDATE_COMMANDS='["docker exec $CONTAINER_NAME /app/backup-db.sh"]'
+
+# Post-update: Run migrations and health check
+POST_UPDATE_COMMANDS='[
+  "docker exec $CONTAINER_NAME /app/migrate.sh",
+  "docker exec $CONTAINER_NAME /app/healthcheck.sh"
+]'
+```
+
+**Backward Compatibility:**
+
+The `UPDATE_COMMANDS` environment variable is still supported for backward compatibility but is deprecated. If set, it behaves as `POST_UPDATE_COMMANDS`:
+
+```bash
+# Deprecated (still works)
+UPDATE_COMMANDS='["echo Update complete"]'
+
+# Recommended
+POST_UPDATE_COMMANDS='["echo Update complete"]'
 ```
 
 ### Webhook Notifications
@@ -290,7 +326,9 @@ docker run -d \
 | `containrdog.auto-update` | Enable/disable auto-update | `true`, `false` |
 | `containrdog.match-tag` | For force policy | `true` |
 | `containrdog.glob-pattern` | For glob policy | `1.2*` |
-| `containrdog.update-commands` | Custom commands (JSON array) | `["echo 'test'"]` |
+| `containrdog.update-commands` | **Deprecated:** Custom commands (JSON array) | Use `containrdog.post-update-commands` |
+| `containrdog.pre-update-commands` | Pre-update commands (JSON array) | `["echo 'Starting update'"]` |
+| `containrdog.post-update-commands` | Post-update commands (JSON array) | `["echo 'Update complete'"]` |
 
 ## Update Policies
 
@@ -375,6 +413,18 @@ app:
     - containrdog.glob-pattern=1.2*
 # Will match: 1.20, 1.21, 1.25, 1.29
 # Will NOT match: 1.3.0, 2.0.0
+```
+
+**Example 6: Per-container pre and post update commands**
+```yaml
+database:
+  image: postgres:15.2
+  labels:
+    - containrdog-enabled=true
+    - containrdog.policy=patch
+    - containrdog.pre-update-commands=["docker exec postgres pg_dump mydb > /backup/pre-update.sql"]
+    - containrdog.post-update-commands=["docker exec postgres psql -c 'SELECT version()'"]
+# Will backup database before update and verify version after
 ```
 
 ## Development

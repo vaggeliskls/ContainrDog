@@ -35,6 +35,8 @@ export class DockerClient {
           globPattern: labels['containrdog.glob-pattern'],
           autoUpdate: this.parseAutoUpdateLabel(labels['containrdog.auto-update']),
           updateCommands: this.parseUpdateCommandsLabel(labels['containrdog.update-commands']),
+          preUpdateCommands: this.parseUpdateCommandsLabel(labels['containrdog.pre-update-commands']),
+          postUpdateCommands: this.parseUpdateCommandsLabel(labels['containrdog.post-update-commands']),
         };
 
         // Always exclude containers with label explicitly set to 'false'

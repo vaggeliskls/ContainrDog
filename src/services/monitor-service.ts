@@ -125,9 +125,21 @@ export class MonitorService {
     const config = getConfig();
 
     // Determine which commands to use (container-specific or global)
-    const updateCommands = container.updateCommands || config.updateCommands;
+    // Support backward compatibility with deprecated updateCommands
+    const preUpdateCommands = container.preUpdateCommands || config.preUpdateCommands;
+    const postUpdateCommands =
+      container.postUpdateCommands ||
+      config.postUpdateCommands ||
+      container.updateCommands ||
+      config.updateCommands;
 
     try {
+      // Execute pre-update commands BEFORE the update
+      if (preUpdateCommands && preUpdateCommands.length > 0) {
+        logger.info(`   🔧 Executing pre-update commands...`);
+        await this.commandExecutor.executeUpdateCommands(update, preUpdateCommands);
+      }
+
       // Pull the new image
       logger.info(`   ⬇️  Pulling: ${newImageName}`);
       await this.dockerClient.pullImage(newImageName);
@@ -138,10 +150,10 @@ export class MonitorService {
 
       logger.info(`   ✅ Successfully updated to ${update.availableImage.tag}`);
 
-      // Execute custom commands AFTER successful update
-      if (updateCommands && updateCommands.length > 0) {
+      // Execute post-update commands AFTER successful update
+      if (postUpdateCommands && postUpdateCommands.length > 0) {
         logger.info(`   💻 Executing post-update commands...`);
-        await this.commandExecutor.executeUpdateCommands(update, updateCommands);
+        await this.commandExecutor.executeUpdateCommands(update, postUpdateCommands);
       }
 
       // Send success webhook notification

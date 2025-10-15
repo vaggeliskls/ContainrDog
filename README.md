@@ -88,6 +88,16 @@ All configuration is done via environment variables:
 | `WEBHOOK_NOTIFY_SUCCESS` | Notify on successful updates | `true` | `false` |
 | `WEBHOOK_NOTIFY_FAILURE` | Notify on failed updates | `true` | `false` |
 | `WEBHOOK_NOTIFY_CHECK` | Notify on every check cycle | `false` | `true` |
+| `GITOPS_ENABLED` | Enable GitOps repository monitoring | `false` | `true` |
+| `GITOPS_REPO_URL` | Git repository URL | - | `https://github.com/user/repo.git` |
+| `GITOPS_BRANCH` | Branch to monitor | `main` | `develop`, `production` |
+| `GITOPS_AUTH_TYPE` | Authentication type | `none` | `token`, `ssh`, `none` |
+| `GITOPS_TOKEN` | Access token for authentication | - | `ghp_xxxxx` |
+| `GITOPS_SSH_KEY_PATH` | Path to SSH private key | - | `/config/id_rsa` |
+| `GITOPS_POLL_INTERVAL` | Git check interval | `60s` | `30s`, `5m` |
+| `GITOPS_WATCH_PATHS` | File patterns to watch (JSON array) | - | `["*.yml", "config/**"]` |
+| `GITOPS_COMMANDS` | Commands to run on changes (JSON array) | - | See below |
+| `GITOPS_CLONE_PATH` | Local clone directory | `/tmp/gitops-repo` | `/data/gitops` |
 
 ### Registry Credentials
 
@@ -260,6 +270,291 @@ When using `WEBHOOK_PROVIDER=generic`, ContainrDog sends a JSON payload:
 }
 ```
 
+## GitOps - Configuration as Code
+
+ContainrDog supports GitOps-style configuration management by monitoring a Git repository for changes. When changes are detected in specified files, custom commands can be executed automatically.
+
+**Key Features:**
+- Monitor any Git repository (GitHub, GitLab, Bitbucket, self-hosted)
+- Token or SSH authentication support
+- Filter by specific files/folders using glob patterns
+- Execute commands when changes are detected
+- Per-container or global GitOps configuration
+- Runs independently on configurable intervals
+
+### How It Works
+
+1. **Repository Monitoring**: ContainrDog clones and monitors your Git repository
+2. **Change Detection**: Periodically checks for new commits on the specified branch
+3. **File Filtering**: Optionally filters changes by glob patterns (e.g., `docker-compose.yml`, `config/**/*.env`)
+4. **Command Execution**: Runs configured commands when relevant changes are detected
+5. **Coordination**: GitOps checks run independently but execute **before** container updates
+
+### Configuration
+
+**Global GitOps (applies to all containers):**
+
+```yaml
+environment:
+  - GITOPS_ENABLED=true
+  - GITOPS_REPO_URL=https://github.com/user/config-repo.git
+  - GITOPS_BRANCH=main
+  - GITOPS_AUTH_TYPE=token
+  - GITOPS_TOKEN=ghp_your_token_here
+  - GITOPS_POLL_INTERVAL=60s
+  - GITOPS_WATCH_PATHS=["docker-compose.yml", "config/**/*.env", ".env*"]
+  - GITOPS_COMMANDS=["docker-compose pull", "docker-compose up -d --remove-orphans"]
+```
+
+**Per-Container GitOps:**
+
+```yaml
+services:
+  app:
+    image: myapp:latest
+    labels:
+      - containrdog-enabled=true
+      - containrdog.gitops-enabled=true
+      - containrdog.gitops-watch-paths=["services/app/**", "config/app.yml"]
+      - containrdog.gitops-commands=["docker exec app /app/reload-config.sh"]
+```
+
+### Authentication
+
+**Token Authentication (GitHub, GitLab, Bitbucket):**
+
+```yaml
+environment:
+  - GITOPS_AUTH_TYPE=token
+  - GITOPS_TOKEN=ghp_your_github_token
+  # or
+  - GITOPS_TOKEN=glpat-your_gitlab_token
+```
+
+**SSH Authentication:**
+
+```yaml
+environment:
+  - GITOPS_AUTH_TYPE=ssh
+  - GITOPS_SSH_KEY_PATH=/config/id_rsa
+
+volumes:
+  - ~/.ssh/id_rsa:/config/id_rsa:ro
+```
+
+**No Authentication (public repositories):**
+
+```yaml
+environment:
+  - GITOPS_AUTH_TYPE=none
+  - GITOPS_REPO_URL=https://github.com/user/public-repo.git
+```
+
+### File Watching with Glob Patterns
+
+Use glob patterns to watch specific files or directories:
+
+```bash
+# Watch specific file
+GITOPS_WATCH_PATHS='["docker-compose.yml"]'
+
+# Watch all YAML files
+GITOPS_WATCH_PATHS='["**/*.yml", "**/*.yaml"]'
+
+# Watch directory and subdirectories
+GITOPS_WATCH_PATHS='["config/**"]'
+
+# Watch multiple patterns
+GITOPS_WATCH_PATHS='["docker-compose.yml", "config/**/*.env", ".env*"]'
+
+# Watch everything (if not specified, all changes trigger commands)
+# GITOPS_WATCH_PATHS not set = watch all files
+```
+
+### Available Environment Variables in Commands
+
+When GitOps commands are executed, the following variables are available:
+
+- `CONTAINER_ID` - Container ID
+- `CONTAINER_NAME` - Container name
+- `CONTAINER_IMAGE` - Container image
+- `GIT_COMMIT` - Current commit hash
+- `GIT_PREVIOUS_COMMIT` - Previous commit hash
+- `GIT_COMMIT_MESSAGE` - Commit message
+- `GIT_CHANGED_FILES` - Comma-separated list of changed files
+
+### GitOps Examples
+
+**Example 1: Auto-deploy on docker-compose.yml changes**
+
+```yaml
+environment:
+  - GITOPS_ENABLED=true
+  - GITOPS_REPO_URL=https://github.com/user/infrastructure.git
+  - GITOPS_BRANCH=production
+  - GITOPS_AUTH_TYPE=token
+  - GITOPS_TOKEN=ghp_xxxxx
+  - GITOPS_WATCH_PATHS=["docker-compose.yml"]
+  - GITOPS_COMMANDS=["docker-compose pull", "docker-compose up -d --remove-orphans"]
+```
+
+**Example 2: Reload nginx config on changes**
+
+```yaml
+services:
+  nginx:
+    image: nginx:latest
+    labels:
+      - containrdog-enabled=true
+      - containrdog.gitops-enabled=true
+      - containrdog.gitops-watch-paths=["config/nginx/**"]
+      - containrdog.gitops-commands=["docker cp $GITOPS_CLONE_PATH/config/nginx/nginx.conf nginx:/etc/nginx/nginx.conf", "docker exec nginx nginx -s reload"]
+```
+
+**Example 3: Update environment variables and restart**
+
+```yaml
+environment:
+  - GITOPS_ENABLED=true
+  - GITOPS_REPO_URL=https://github.com/user/configs.git
+  - GITOPS_WATCH_PATHS=[".env", "config/*.env"]
+  - GITOPS_COMMANDS=["cp $GITOPS_CLONE_PATH/.env /app/.env", "docker-compose restart"]
+```
+
+**Example 4: Notification on config changes**
+
+```yaml
+environment:
+  - GITOPS_ENABLED=true
+  - GITOPS_REPO_URL=https://github.com/user/configs.git
+  - GITOPS_COMMANDS=["echo 'Config updated: $GIT_COMMIT_MESSAGE'", "curl -X POST https://slack.com/webhook -d 'Git changes detected in: $GIT_CHANGED_FILES'"]
+```
+
+**Example 5: Multi-container coordination (shared repository)**
+
+```yaml
+environment:
+  - GITOPS_ENABLED=true
+  - GITOPS_REPO_URL=https://github.com/user/microservices.git
+
+services:
+  api:
+    labels:
+      - containrdog.gitops-watch-paths=["services/api/**"]
+      - containrdog.gitops-commands=["docker-compose restart api"]
+
+  web:
+    labels:
+      - containrdog.gitops-watch-paths=["services/web/**"]
+      - containrdog.gitops-commands=["docker-compose restart web"]
+```
+
+**Example 6: Per-container repositories**
+
+Each container monitors its own separate Git repository:
+
+```yaml
+services:
+  api:
+    image: myapi:latest
+    labels:
+      - containrdog-enabled=true
+      - containrdog.gitops-enabled=true
+      - containrdog.gitops-repo-url=https://github.com/user/api-config.git
+      - containrdog.gitops-branch=production
+      - containrdog.gitops-auth-type=token
+      - containrdog.gitops-token=ghp_api_token
+      - containrdog.gitops-poll-interval=30s
+      - containrdog.gitops-watch-paths=["config/**", "*.env"]
+      - containrdog.gitops-commands=["docker exec api /app/reload-config.sh"]
+
+  web:
+    image: myweb:latest
+    labels:
+      - containrdog-enabled=true
+      - containrdog.gitops-enabled=true
+      - containrdog.gitops-repo-url=https://github.com/user/web-config.git
+      - containrdog.gitops-branch=production
+      - containrdog.gitops-auth-type=token
+      - containrdog.gitops-token=ghp_web_token
+      - containrdog.gitops-watch-paths=["assets/**", "config.json"]
+      - containrdog.gitops-commands=["docker exec web npm run rebuild"]
+
+  database:
+    image: postgres:15
+    labels:
+      - containrdog-enabled=true
+      - containrdog.gitops-enabled=true
+      - containrdog.gitops-repo-url=https://github.com/user/db-migrations.git
+      - containrdog.gitops-branch=main
+      - containrdog.gitops-watch-paths=["migrations/**"]
+      - containrdog.gitops-commands=["docker exec database psql -f /migrations/latest.sql"]
+```
+
+**Example 7: Mix global and per-container repositories**
+
+Some containers use the global repository, others use their own:
+
+```yaml
+environment:
+  # Global GitOps for infrastructure
+  - GITOPS_ENABLED=true
+  - GITOPS_REPO_URL=https://github.com/user/infrastructure.git
+  - GITOPS_WATCH_PATHS=["docker-compose.yml", "shared/**"]
+  - GITOPS_COMMANDS=["docker-compose up -d --remove-orphans"]
+
+services:
+  # Uses global GitOps repo
+  nginx:
+    image: nginx:latest
+    labels:
+      - containrdog-enabled=true
+      - containrdog.gitops-enabled=true
+      - containrdog.gitops-watch-paths=["nginx/**"]
+
+  # Uses its own dedicated repo
+  app:
+    image: myapp:latest
+    labels:
+      - containrdog-enabled=true
+      - containrdog.gitops-enabled=true
+      - containrdog.gitops-repo-url=https://github.com/user/app-config.git
+      - containrdog.gitops-branch=production
+      - containrdog.gitops-commands=["docker exec app /app/reload.sh"]
+```
+
+### GitOps Workflow
+
+The complete update workflow with GitOps enabled:
+
+```
+1. GitOps Check (every GITOPS_POLL_INTERVAL)
+   ↓
+2. Changes detected in watched files?
+   ↓ (yes)
+3. Execute GitOps commands
+   ↓
+4. Container Update Check (every INTERVAL)
+   ↓
+5. New image version available?
+   ↓ (yes)
+6. Execute pre-update commands
+   ↓
+7. Pull new image & recreate container
+   ↓
+8. Execute post-update commands
+```
+
+### Use Cases
+
+1. **Configuration Management**: Keep container configs in Git, auto-deploy changes
+2. **Infrastructure as Code**: Manage docker-compose files in Git
+3. **Multi-Environment**: Use different branches for dev/staging/production
+4. **Audit Trail**: Git history provides complete change tracking
+5. **Collaboration**: Team members can update configs via pull requests
+6. **Rollback**: Easy rollback using Git reverts
+7. **Secret Management**: Update secrets stored in Git (encrypted)
+
 ## Auto-Update Behavior
 
 By default (`AUTO_UPDATE=true`), when an update is detected, the container updater will:
@@ -329,6 +624,16 @@ docker run -d \
 | `containrdog.update-commands` | **Deprecated:** Custom commands (JSON array) | Use `containrdog.post-update-commands` |
 | `containrdog.pre-update-commands` | Pre-update commands (JSON array) | `["echo 'Starting update'"]` |
 | `containrdog.post-update-commands` | Post-update commands (JSON array) | `["echo 'Update complete'"]` |
+| `containrdog.gitops-enabled` | Enable/disable GitOps for container | `true`, `false` |
+| `containrdog.gitops-repo-url` | Per-container Git repository URL | `https://github.com/user/repo.git` |
+| `containrdog.gitops-branch` | Per-container Git branch | `main`, `develop` |
+| `containrdog.gitops-auth-type` | Per-container auth type | `token`, `ssh`, `none` |
+| `containrdog.gitops-token` | Per-container auth token | `ghp_xxxxx` |
+| `containrdog.gitops-ssh-key-path` | Per-container SSH key path | `/config/id_rsa` |
+| `containrdog.gitops-poll-interval` | Per-container poll interval | `30s`, `2m` |
+| `containrdog.gitops-watch-paths` | GitOps watch patterns (JSON array) | `["config/**", "*.yml"]` |
+| `containrdog.gitops-commands` | GitOps commands (JSON array) | `["docker exec app reload"]` |
+| `containrdog.gitops-clone-path` | Per-container clone directory | `/tmp/gitops-myapp` |
 
 ## Update Policies
 

@@ -1,5 +1,5 @@
 import Docker from 'dockerode';
-import { ContainerInfo, UpdatePolicy } from '../types';
+import { ContainerInfo, UpdatePolicy, GitAuthType } from '../types';
 import { logger } from '../utils/logger';
 import { getConfig } from '../utils/config';
 
@@ -35,6 +35,18 @@ export class DockerClient {
           globPattern: labels['containrdog.glob-pattern'],
           autoUpdate: this.parseAutoUpdateLabel(labels['containrdog.auto-update']),
           updateCommands: this.parseUpdateCommandsLabel(labels['containrdog.update-commands']),
+          preUpdateCommands: this.parseUpdateCommandsLabel(labels['containrdog.pre-update-commands']),
+          postUpdateCommands: this.parseUpdateCommandsLabel(labels['containrdog.post-update-commands']),
+          gitopsEnabled: this.parseGitOpsEnabledLabel(labels['containrdog.gitops-enabled']),
+          gitopsRepoUrl: labels['containrdog.gitops-repo-url'],
+          gitopsBranch: labels['containrdog.gitops-branch'],
+          gitopsAuthType: this.parseGitOpsAuthTypeLabel(labels['containrdog.gitops-auth-type']),
+          gitopsToken: labels['containrdog.gitops-token'],
+          gitopsSshKeyPath: labels['containrdog.gitops-ssh-key-path'],
+          gitopsPollInterval: this.parseIntervalLabel(labels['containrdog.gitops-poll-interval']),
+          gitopsWatchPaths: this.parseUpdateCommandsLabel(labels['containrdog.gitops-watch-paths']),
+          gitopsCommands: this.parseUpdateCommandsLabel(labels['containrdog.gitops-commands']),
+          gitopsClonePath: labels['containrdog.gitops-clone-path'],
         };
 
         // Always exclude containers with label explicitly set to 'false'
@@ -227,6 +239,47 @@ export class DockerClient {
     } catch (error) {
       logger.warn(`⚠️  Invalid update-commands label format - expected JSON array`);
       return undefined;
+    }
+  }
+
+  private parseGitOpsEnabledLabel(gitopsLabel?: string): boolean | undefined {
+    if (!gitopsLabel) return undefined;
+    return gitopsLabel === 'true';
+  }
+
+  private parseGitOpsAuthTypeLabel(authTypeLabel?: string): GitAuthType | undefined {
+    if (!authTypeLabel) return undefined;
+
+    const normalized = authTypeLabel.toLowerCase();
+    switch (normalized) {
+      case 'token':
+        return GitAuthType.TOKEN;
+      case 'ssh':
+        return GitAuthType.SSH;
+      case 'none':
+        return GitAuthType.NONE;
+      default:
+        logger.warn(`⚠️  Invalid gitops-auth-type label '${authTypeLabel}'`);
+        return undefined;
+    }
+  }
+
+  private parseIntervalLabel(intervalLabel?: string): number | undefined {
+    if (!intervalLabel) return undefined;
+
+    const match = intervalLabel.match(/^(\d+)(s|m)?$/);
+    if (!match) {
+      logger.warn(`⚠️  Invalid interval format: ${intervalLabel}`);
+      return undefined;
+    }
+
+    const value = parseInt(match[1], 10);
+    const unit = match[2] || 's';
+
+    if (unit === 's') {
+      return value * 1000;
+    } else {
+      return value * 60 * 1000;
     }
   }
 }

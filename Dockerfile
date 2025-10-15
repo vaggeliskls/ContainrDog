@@ -1,36 +1,45 @@
 # --- Base stage: common setup ---
 FROM node:22-alpine AS base
-WORKDIR /app
-
-# --- Dev stage ---
-FROM base AS dev
-COPY . .
-RUN npm install
-CMD ["npm", "run", "dev"]
-
-# --- Build stage ---
-FROM base AS builder
-COPY package*.json tsconfig.json ./
-RUN npm ci
-# Copy source code
-COPY src ./src
-RUN npm run build
-
-
-# Production stage with development tools
-FROM base
-
-WORKDIR /app
-
 # Install system dependencies, Docker CLI, Podman, and AWS CLI
 RUN apk add --no-cache \
     dumb-init \
     curl \
     docker-cli \
+    docker-compose \
     podman \
+    podman-compose \
+    helm \
+    kubectl \
     git \
+    openssh-client \
     make \
+    shadow \
     && rm -rf /var/cache/apk/*
+
+# Use existing node user (UID:GID 1000:1000) and set permissions
+RUN mkdir -p /app \
+    && chown -R node:node /app
+
+WORKDIR /app
+USER node
+
+# --- Dev stage ---
+FROM base AS dev
+COPY --chown=node:node . .
+RUN npm install
+CMD ["npm", "run", "dev"]
+
+# --- Build stage ---
+FROM base AS builder
+COPY --chown=node:node package*.json tsconfig.json ./
+RUN npm ci
+# Copy source code
+COPY --chown=node:node src ./src
+RUN npm run build
+
+
+# Production stage with development tools
+FROM base
 
 # Copy package files and install production dependencies
 COPY --from=builder /app/node_modules ./node_modules

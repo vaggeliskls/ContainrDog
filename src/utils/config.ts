@@ -1,4 +1,4 @@
-import { Config, RegistryCredentials, UpdatePolicy, WebhookConfig, WebhookProvider } from '../types';
+import { Config, RegistryCredentials, UpdatePolicy, WebhookConfig, WebhookProvider, GitOpsConfig, GitAuthType } from '../types';
 import { readFileSync, existsSync } from 'fs';
 
 export class ConfigManager {
@@ -57,6 +57,9 @@ export class ConfigManager {
     // Webhook configuration
     const webhook = this.parseWebhookConfig();
 
+    // GitOps configuration
+    const gitops = this.parseGitOpsConfig();
+
     return {
       interval,
       labeledOnly,
@@ -72,6 +75,7 @@ export class ConfigManager {
       globPattern,
       autoUpdate,
       webhook,
+      gitops,
     };
   }
 
@@ -310,8 +314,114 @@ export class ConfigManager {
     };
   }
 
+  private parseGitOpsConfig(): GitOpsConfig | undefined {
+    const enabled = process.env.GITOPS_ENABLED === 'true';
+    const repoUrl = process.env.GITOPS_REPO_URL;
+
+    if (!enabled || !repoUrl) {
+      return undefined;
+    }
+
+    // Parse branch (default: main)
+    const branch = process.env.GITOPS_BRANCH || 'main';
+
+    // Parse auth type (default: none)
+    let authType = GitAuthType.NONE;
+    const authTypeStr = process.env.GITOPS_AUTH_TYPE?.toLowerCase();
+
+    switch (authTypeStr) {
+      case 'token':
+        authType = GitAuthType.TOKEN;
+        break;
+      case 'ssh':
+        authType = GitAuthType.SSH;
+        break;
+      default:
+        authType = GitAuthType.NONE;
+    }
+
+    // Parse token and SSH key path
+    const token = process.env.GITOPS_TOKEN;
+    const sshKeyPath = process.env.GITOPS_SSH_KEY_PATH;
+
+    // Parse poll interval (default: 60s)
+    const pollIntervalStr = process.env.GITOPS_POLL_INTERVAL || '60s';
+    const pollInterval = this.parseInterval(pollIntervalStr);
+
+    // Parse watch paths
+    const watchPathsJson = process.env.GITOPS_WATCH_PATHS;
+    let watchPaths: string[] | undefined;
+
+    if (watchPathsJson) {
+      try {
+        const parsed = JSON.parse(watchPathsJson);
+        if (Array.isArray(parsed)) {
+          watchPaths = parsed;
+        }
+      } catch (error) {
+        console.error('Failed to parse GITOPS_WATCH_PATHS:', error);
+      }
+    }
+
+    // Parse commands
+    const commandsJson = process.env.GITOPS_COMMANDS;
+    let commands: string[] | undefined;
+
+    if (commandsJson) {
+      try {
+        const parsed = JSON.parse(commandsJson);
+        if (Array.isArray(parsed)) {
+          commands = parsed;
+        } else {
+          commands = [parsed];
+        }
+      } catch (error) {
+        console.error('Failed to parse GITOPS_COMMANDS:', error);
+      }
+    }
+
+    // Clone path (default: /tmp/{repo-name})
+    let clonePath = process.env.GITOPS_CLONE_PATH;
+    if (!clonePath) {
+      // Extract repo name from URL
+      const repoName = this.extractRepoName(repoUrl);
+      clonePath = `/tmp/${repoName}`;
+    }
+
+    return {
+      enabled,
+      repoUrl,
+      branch,
+      authType,
+      token,
+      sshKeyPath,
+      pollInterval,
+      watchPaths,
+      commands,
+      clonePath,
+    };
+  }
+
   public getConfig(): Config {
     return this.config;
+  }
+
+  private extractRepoName(url: string): string {
+    // Extract repo name from Git URL
+    // Examples:
+    //   https://github.com/user/repo.git -> repo
+    //   git@github.com:user/repo.git -> repo
+    //   https://github.com/user/repo -> repo
+    try {
+      const match = url.match(/\/([^\/]+?)(\.git)?$/);
+      if (match && match[1]) {
+        return match[1];
+      }
+      // Fallback to generic name
+      return 'gitops-repo';
+    } catch {
+      return 'gitops-repo';
+    }
   }
 
   public reload(): void {

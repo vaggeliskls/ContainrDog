@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   containrdog:
@@ -9,6 +8,11 @@ services:
       target: dev
     container_name: containrdog
     restart: unless-stopped
+    # Run as non-root user (UID:GID 1000:1000)
+    # Add supplementary groups to access docker socket
+    user: "1000:1000"
+    group_add:
+      - "0"  # Add root group for Docker socket access (common on Docker Desktop)
     develop:
       watch:
         - action: sync
@@ -87,6 +91,18 @@ services:
       # - WEBHOOK_NOTIFY_FAILURE=true    # Notify when update fails
       # - WEBHOOK_NOTIFY_CHECK=false     # Notify on every check cycle
 
+      # GitOps Configuration - Monitor a Git repository for configuration changes
+      - GITOPS_ENABLED=true
+      - GITOPS_REPO_URL=https://github.com/vaggeliskls/webdav-server
+      - GITOPS_BRANCH=main
+      # - GITOPS_AUTH_TYPE=token  # or 'ssh' or 'none'
+      # - GITOPS_TOKEN=ghp_your_token_here
+      # - GITOPS_SSH_KEY_PATH=/config/id_rsa
+      - GITOPS_POLL_INTERVAL=5s
+      # - GITOPS_WATCH_PATHS=["docker-compose.yml", "config/**/*.env"]
+      - GITOPS_COMMANDS=["ls -la"]
+      - GITOPS_CLONE_PATH=/tmp/webdav-server
+
     labels:
       # Prevent self-monitoring
       - containrdog-enabled=false
@@ -123,3 +139,20 @@ services:
 
       # For force policy with match-tag
       # - containrdog.match-tag=true
+
+      # GitOps configuration per container
+      # Option 1: Use global repository with specific watch paths
+      # - containrdog.gitops-enabled=true
+      # - containrdog.gitops-watch-paths=["services/nginx/**", "config/nginx.conf"]
+      # - containrdog.gitops-commands=["docker exec nginx nginx -s reload"]
+
+      # Option 2: Use dedicated repository for this container
+      # - containrdog.gitops-enabled=true
+      # - containrdog.gitops-repo-url=https://github.com/user/nginx-config.git
+      # - containrdog.gitops-branch=main
+      # - containrdog.gitops-auth-type=token
+      # - containrdog.gitops-token=ghp_xxxxx
+      # - containrdog.gitops-poll-interval=30s
+      # - containrdog.gitops-watch-paths=["**/*.conf"]
+      # - containrdog.gitops-commands=["docker cp /tmp/gitops-nginx/nginx.conf nginx:/etc/nginx/", "docker exec nginx nginx -s reload"]
+      # - containrdog.gitops-clone-path=/tmp/gitops-nginx

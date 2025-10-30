@@ -1,4 +1,3 @@
-````markdown
 <div align="center">
   <img src="assets/logo.png" alt="ContainrDog Logo" width="300"/>
   

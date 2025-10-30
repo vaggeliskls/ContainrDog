@@ -38,8 +38,8 @@ COPY --chown=node:node src ./src
 RUN npm run build
 
 
-# Production stage with development tools
-FROM base
+# --- Production stage ---
+FROM base AS prod
 
 # Copy package files and install production dependencies
 COPY --from=builder /app/node_modules ./node_modules

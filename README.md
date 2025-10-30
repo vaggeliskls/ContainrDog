@@ -1,6 +1,15 @@
-# ContainrDog 🐕
-
-Automated container image update monitor for Docker and Podman. Periodically checks for new image versions and executes custom commands when updates are detected.
+````markdown
+<div align="center">
+  <img src="assets/logo.png" alt="ContainrDog Logo" width="300"/>
+  
+  # ContainrDog 🐕
+  
+  **Automated container image update monitor for Docker and Podman**
+  
+  Periodically checks for new image versions and executes custom commands when updates are detected.
+  
+  ---
+</div>
 
 ## Features
 

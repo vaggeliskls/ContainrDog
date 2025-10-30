@@ -1,0 +1,125 @@
+name: Build and Publish Docker Image
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch: # Allow manual triggers
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=ContainrDog
+            org.opencontainers.image.description=Automated container image update monitor for Docker and Podman
+            org.opencontainers.image.vendor=vaggeliskls
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          target: prod
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            BUILD_DATE=${{ github.event.release.created_at }}
+            VCS_REF=${{ github.sha }}
+
+      - name: Generate build summary
+        if: success()
+        run: |
+          echo "# 🎉 Docker Image Published Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📦 Image Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Registry**: \`ghcr.io/${{ github.repository }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Platforms**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🏷️ Available Tags" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Pull the Image" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "# Latest release" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ghcr.io/${{ github.repository }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Specific version" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔗 Links" >> $GITHUB_STEP_SUMMARY
+          echo "- [Release Notes](${{ github.event.release.html_url }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [Package Registry](https://github.com/${{ github.repository }}/pkgs/container/containrdog)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment on release
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tags = `${{ steps.meta.outputs.tags }}`.split('\n');
+            const tagList = tags.map(tag => `- \`${tag}\``).join('\n');
+
+            const comment = `## 🐳 Docker Image Published
+
+            The Docker image has been successfully built and published to GitHub Container Registry!
+
+            ### Available Tags
+            ${tagList}
+
+            ### Pull the Image
+            \`\`\`bash
+            docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            \`\`\`
+
+            ### Supported Platforms
+            - linux/amd64
+            - linux/arm64
+
+            ### View Package
+            📦 [GitHub Container Registry](https://github.com/${{ github.repository }}/pkgs/container/containrdog)
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.payload.release.id,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

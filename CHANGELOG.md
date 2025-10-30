@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/vaggeliskls/ContainrDog/compare/0.1.0...0.1.1) (2025-10-30)
+
+
+### Bug Fixes
+
+* build and push workflow ([dd24476](https://github.com/vaggeliskls/ContainrDog/commit/dd244760a192e10eac5ecfa70425f586ca86fcd8))
+
 ## [0.1.0](https://github.com/vaggeliskls/ContainrDog/compare/0.0.1...0.1.0) (2025-10-30)
 
 

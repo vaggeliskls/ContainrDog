@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/vaggeliskls/ContainrDog/compare/0.1.1...0.2.0) (2025-11-07)
+
+
+### Features
+
+* ecr registry login ([3f01cba](https://github.com/vaggeliskls/ContainrDog/commit/3f01cbafed8c3303c861538e3c2150e162f230d4))
+* quite mode on command execution ([4809c3f](https://github.com/vaggeliskls/ContainrDog/commit/4809c3f6886aa9975e18e4cb9387c789bc968e8f))
+
 ## [0.1.1](https://github.com/vaggeliskls/ContainrDog/compare/0.1.0...0.1.1) (2025-10-30)
 
 

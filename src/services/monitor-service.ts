@@ -6,7 +6,7 @@ import { WebhookService } from './webhook-service';
 import { GitService } from './git-service';
 import { logger } from '../utils/logger';
 import { getConfig } from '../utils/config';
-import { ImageUpdateInfo, GitChangeInfo, ContainerInfo } from '../types';
+import { ImageUpdateInfo, GitChangeInfo, ContainerInfo, RegistryCredentials } from '../types';
 import { ImageParser } from '../utils/image-parser';
 import { minimatch } from 'minimatch';
 
@@ -41,6 +41,10 @@ export class MonitorService {
       this.gitService = new GitService(config.gitops);
       logger.info('📦 GitOps monitoring enabled');
     }
+  }
+
+  public setECRCredentials(ecrCredentials: Map<string, RegistryCredentials>): void {
+    this.registryService.setECRCredentials(ecrCredentials);
   }
 
   async initialize(): Promise<boolean> {
@@ -467,8 +471,12 @@ export class MonitorService {
       clonePath = container.gitopsClonePath || `/tmp/${this.extractRepoName(container.gitopsRepoUrl)}`;
     }
 
+    // Check if quiet mode is enabled (container-specific or global)
+    const quietMode = container.gitopsQuietMode ?? config.gitops?.quietMode ?? false;
+
     logger.info(`📦 GitOps: Executing commands for ${container.name}...`);
     logger.info(`   📁 Working directory: ${clonePath}`);
+    logger.info(`   🔍 Quiet mode: ${quietMode} (container: ${container.gitopsQuietMode}, global: ${config.gitops?.quietMode})`);
 
     try {
       // Prepare environment variables
@@ -506,14 +514,21 @@ export class MonitorService {
               reject(error);
               return;
             }
-            if (stdout) logger.info(`   📤 ${stdout.trim()}`);
-            if (stderr) logger.warn(`   ⚠️  ${stderr.trim()}`);
+            // In quiet mode, only show stderr (errors/warnings)
+            if (!quietMode && stdout) {
+              logger.info(`   📤 ${stdout.trim()}`);
+            }
+            if (stderr) {
+              logger.warn(`   ⚠️  ${stderr.trim()}`);
+            }
             resolve();
           });
         });
       }
 
-      logger.info(`   ✅ GitOps commands completed for ${container.name}`);
+      if (!quietMode) {
+        logger.info(`   ✅ GitOps commands completed for ${container.name}`);
+      }
     } catch (error) {
       logger.error(`   ❌ GitOps commands failed for ${container.name}:`, error);
     }

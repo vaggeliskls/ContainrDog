@@ -40,6 +40,7 @@ export interface GitOpsConfig {
   watchPaths?: string[]; // Glob patterns for files/folders to watch
   commands?: string[]; // Commands to execute on changes
   clonePath: string; // Local path to clone repo
+  quietMode?: boolean; // Only show errors from commands (default: false)
 }
 
 export interface Config {
@@ -58,12 +59,22 @@ export interface Config {
   autoUpdate: boolean; // Global auto-update setting
   webhook?: WebhookConfig; // Webhook notifications
   gitops?: GitOpsConfig; // GitOps configuration
+  ecr?: ECRConfig; // AWS ECR configuration
 }
 
 export interface RegistryCredentials {
   registry: string;
   username: string;
   password: string;
+}
+
+export interface ECRConfig {
+  enabled: boolean;
+  region: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+  authRefreshInterval: number; // in milliseconds
+  registries: string[]; // List of ECR registry URLs to authenticate
 }
 
 export interface ContainerInfo {
@@ -90,6 +101,7 @@ export interface ContainerInfo {
   gitopsWatchPaths?: string[]; // Watch specific paths for this container
   gitopsCommands?: string[]; // GitOps commands for this container
   gitopsClonePath?: string; // Per-container clone path
+  gitopsQuietMode?: boolean; // Per-container quiet mode
 }
 
 export interface ImageInfo {

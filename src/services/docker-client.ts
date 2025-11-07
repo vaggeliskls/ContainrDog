@@ -47,6 +47,7 @@ export class DockerClient {
           gitopsWatchPaths: this.parseUpdateCommandsLabel(labels['containrdog.gitops-watch-paths']),
           gitopsCommands: this.parseUpdateCommandsLabel(labels['containrdog.gitops-commands']),
           gitopsClonePath: labels['containrdog.gitops-clone-path'],
+          gitopsQuietMode: labels['containrdog.gitops-quiet-mode'] ? labels['containrdog.gitops-quiet-mode'] === 'true' : undefined,
         };
 
         // Always exclude containers with label explicitly set to 'false'

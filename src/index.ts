@@ -1,22 +1,38 @@
 import cron from 'node-cron';
 import { MonitorService } from './services/monitor-service';
+import { ECRAuthService } from './services/ecr-auth-service';
 import { logger } from './utils/logger';
 import { getConfig } from './utils/config';
 
 class ContainerUpdater {
   private monitorService: MonitorService;
+  private ecrAuthService?: ECRAuthService;
   private cronJob?: cron.ScheduledTask;
   private intervalId?: NodeJS.Timeout;
   private config = getConfig();
 
   constructor() {
     this.monitorService = new MonitorService();
+
+    // Initialize ECR auth service if configured
+    if (this.config.ecr?.enabled) {
+      this.ecrAuthService = new ECRAuthService();
+    }
   }
 
   async start(): Promise<void> {
     try {
       logger.info('🐾 Starting ContainrDog...');
       this.logConfiguration();
+
+      // Initialize ECR authentication if enabled
+      if (this.ecrAuthService) {
+        const ecrInitialized = await this.ecrAuthService.initialize();
+        if (ecrInitialized) {
+          // Provide ECR credentials to the monitor service's registry service
+          this.monitorService.setECRCredentials(this.ecrAuthService.getCredentials());
+        }
+      }
 
       // Initialize the monitor service
       const initialized = await this.monitorService.initialize();
@@ -97,6 +113,11 @@ class ContainerUpdater {
     logger.info(
       `  🔐 Registry credentials: ${this.config.registryCredentials?.length || 0} configured`
     );
+    if (this.config.ecr?.enabled) {
+      logger.info(`  🔐 AWS ECR: enabled (region: ${this.config.ecr.region})`);
+      const refreshHours = Math.floor(this.config.ecr.authRefreshInterval / 1000 / 60 / 60);
+      logger.info(`  🔄 ECR token refresh: every ${refreshHours} hour(s)`);
+    }
     logger.info(`  💻 Update commands: ${this.config.updateCommands?.length || 0} configured`);
     logger.info(`  📝 Log level: ${this.config.logLevel}`);
   }
@@ -111,6 +132,10 @@ class ContainerUpdater {
 
       if (this.intervalId) {
         clearInterval(this.intervalId);
+      }
+
+      if (this.ecrAuthService) {
+        this.ecrAuthService.shutdown();
       }
 
       await this.monitorService.shutdown();

@@ -471,8 +471,12 @@ export class MonitorService {
       clonePath = container.gitopsClonePath || `/tmp/${this.extractRepoName(container.gitopsRepoUrl)}`;
     }
 
+    // Check if quiet mode is enabled (container-specific or global)
+    const quietMode = container.gitopsQuietMode ?? config.gitops?.quietMode ?? false;
+
     logger.info(`📦 GitOps: Executing commands for ${container.name}...`);
     logger.info(`   📁 Working directory: ${clonePath}`);
+    logger.info(`   🔍 Quiet mode: ${quietMode} (container: ${container.gitopsQuietMode}, global: ${config.gitops?.quietMode})`);
 
     try {
       // Prepare environment variables
@@ -510,14 +514,21 @@ export class MonitorService {
               reject(error);
               return;
             }
-            if (stdout) logger.info(`   📤 ${stdout.trim()}`);
-            if (stderr) logger.warn(`   ⚠️  ${stderr.trim()}`);
+            // In quiet mode, only show stderr (errors/warnings)
+            if (!quietMode && stdout) {
+              logger.info(`   📤 ${stdout.trim()}`);
+            }
+            if (stderr) {
+              logger.warn(`   ⚠️  ${stderr.trim()}`);
+            }
             resolve();
           });
         });
       }
 
-      logger.info(`   ✅ GitOps commands completed for ${container.name}`);
+      if (!quietMode) {
+        logger.info(`   ✅ GitOps commands completed for ${container.name}`);
+      }
     } catch (error) {
       logger.error(`   ❌ GitOps commands failed for ${container.name}:`, error);
     }

@@ -40,6 +40,7 @@ export interface GitOpsConfig {
   watchPaths?: string[]; // Glob patterns for files/folders to watch
   commands?: string[]; // Commands to execute on changes
   clonePath: string; // Local path to clone repo
+  quietMode?: boolean; // Only show errors from commands (default: false)
 }
 
 export interface Config {
@@ -100,6 +101,7 @@ export interface ContainerInfo {
   gitopsWatchPaths?: string[]; // Watch specific paths for this container
   gitopsCommands?: string[]; // GitOps commands for this container
   gitopsClonePath?: string; // Per-container clone path
+  gitopsQuietMode?: boolean; // Per-container quiet mode
 }
 
 export interface ImageInfo {

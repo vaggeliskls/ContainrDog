@@ -392,6 +392,9 @@ export class ConfigManager {
       clonePath = `/tmp/${repoName}`;
     }
 
+    // Quiet mode (default: false - show all output)
+    const quietMode = process.env.GITOPS_QUIET_MODE === 'true';
+
     return {
       enabled,
       repoUrl,
@@ -403,6 +406,7 @@ export class ConfigManager {
       watchPaths,
       commands,
       clonePath,
+      quietMode,
     };
   }
 

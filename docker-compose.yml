@@ -102,6 +102,7 @@ services:
       # - GITOPS_WATCH_PATHS=["docker-compose.yml", "config/**/*.env"]
       - GITOPS_COMMANDS=["ls -la"]
       - GITOPS_CLONE_PATH=/tmp/webdav-server
+      - GITOPS_QUIET_MODE=true  # Only show errors from commands (default: false)
 
       # AWS ECR Configuration - Automatic authentication with AWS Elastic Container Registry
       # Enable ECR authentication (default: false)
@@ -173,6 +174,7 @@ services:
       # - containrdog.gitops-enabled=true
       # - containrdog.gitops-watch-paths=["services/nginx/**", "config/nginx.conf"]
       # - containrdog.gitops-commands=["docker exec nginx nginx -s reload"]
+      # - containrdog.gitops-quiet-mode=true  # Only show errors (default: uses global GITOPS_QUIET_MODE)
 
       # Option 2: Use dedicated repository for this container
       # - containrdog.gitops-enabled=true
@@ -184,3 +186,4 @@ services:
       # - containrdog.gitops-watch-paths=["**/*.conf"]
       # - containrdog.gitops-commands=["docker cp /tmp/gitops-nginx/nginx.conf nginx:/etc/nginx/", "docker exec nginx nginx -s reload"]
       # - containrdog.gitops-clone-path=/tmp/gitops-nginx
+      # - containrdog.gitops-quiet-mode=true  # Only show errors

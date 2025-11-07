@@ -1,4 +1,4 @@
-import { Config, RegistryCredentials, UpdatePolicy, WebhookConfig, WebhookProvider, GitOpsConfig, GitAuthType } from '../types';
+import { Config, RegistryCredentials, UpdatePolicy, WebhookConfig, WebhookProvider, GitOpsConfig, GitAuthType, ECRConfig } from '../types';
 import { readFileSync, existsSync } from 'fs';
 
 export class ConfigManager {
@@ -60,6 +60,9 @@ export class ConfigManager {
     // GitOps configuration
     const gitops = this.parseGitOpsConfig();
 
+    // ECR configuration
+    const ecr = this.parseECRConfig();
+
     return {
       interval,
       labeledOnly,
@@ -76,6 +79,7 @@ export class ConfigManager {
       autoUpdate,
       webhook,
       gitops,
+      ecr,
     };
   }
 
@@ -400,6 +404,79 @@ export class ConfigManager {
       commands,
       clonePath,
     };
+  }
+
+  private parseECRConfig(): ECRConfig | undefined {
+    const enabled = process.env.ECR_ENABLED === 'true';
+
+    if (!enabled) {
+      return undefined;
+    }
+
+    // AWS region is required for ECR
+    const region = process.env.ECR_REGION || process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
+
+    if (!region) {
+      console.warn('ECR_ENABLED is true but no region specified. Provide ECR_REGION, AWS_REGION, or AWS_DEFAULT_REGION');
+      return undefined;
+    }
+
+    // AWS credentials (optional - can use IAM role/instance profile)
+    const accessKeyId = process.env.ECR_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
+    const secretAccessKey = process.env.ECR_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
+
+    // Parse auth refresh interval (default: 6 hours, ECR tokens expire in 12 hours)
+    const refreshIntervalStr = process.env.ECR_AUTH_REFRESH_INTERVAL || '6h';
+    const authRefreshInterval = this.parseECRInterval(refreshIntervalStr);
+
+    // Parse registry URLs (comma-separated list)
+    const registriesStr = process.env.ECR_REGISTRIES;
+    let registries: string[] = [];
+
+    if (registriesStr) {
+      registries = registriesStr.split(',').map(r => r.trim()).filter(r => r.length > 0);
+    }
+
+    // If no explicit registries provided, we'll auto-detect from account ID if available
+    if (registries.length === 0) {
+      const accountId = process.env.ECR_ACCOUNT_ID || process.env.AWS_ACCOUNT_ID;
+      if (accountId) {
+        registries = [`${accountId}.dkr.ecr.${region}.amazonaws.com`];
+      }
+    }
+
+    return {
+      enabled,
+      region,
+      accessKeyId,
+      secretAccessKey,
+      authRefreshInterval,
+      registries,
+    };
+  }
+
+  private parseECRInterval(intervalStr: string): number {
+    // Support formats: "6h", "30m", "3600s"
+    const match = intervalStr.match(/^(\d+)(h|m|s)?$/);
+
+    if (!match) {
+      console.warn(`Invalid ECR_AUTH_REFRESH_INTERVAL format: ${intervalStr}, using default 6h`);
+      return 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+    }
+
+    const value = parseInt(match[1], 10);
+    const unit = match[2] || 'h'; // Default to hours
+
+    switch (unit) {
+      case 'h':
+        return value * 60 * 60 * 1000; // hours to milliseconds
+      case 'm':
+        return value * 60 * 1000; // minutes to milliseconds
+      case 's':
+        return value * 1000; // seconds to milliseconds
+      default:
+        return 6 * 60 * 60 * 1000; // Default 6 hours
+    }
   }
 
   public getConfig(): Config {

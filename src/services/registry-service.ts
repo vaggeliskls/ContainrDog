@@ -6,6 +6,7 @@ import { getConfig } from '../utils/config';
 export class RegistryService {
   private axiosInstance: AxiosInstance;
   private credentials: Map<string, RegistryCredentials>;
+  private ecrCredentials?: Map<string, RegistryCredentials>;
 
   constructor() {
     this.axiosInstance = axios.create({
@@ -25,8 +26,28 @@ export class RegistryService {
     }
   }
 
+  public setECRCredentials(ecrCredentials: Map<string, RegistryCredentials>): void {
+    this.ecrCredentials = ecrCredentials;
+    logger.debug(`ECR credentials updated for ${ecrCredentials.size} registries`);
+  }
+
   private getCredentials(registry: string): RegistryCredentials | undefined {
+    // Check if this is an ECR registry and we have ECR credentials
+    if (this.ecrCredentials && this.isECRRegistry(registry)) {
+      const ecrCred = this.ecrCredentials.get(registry);
+      if (ecrCred) {
+        logger.debug(`Using ECR credentials for ${registry}`);
+        return ecrCred;
+      }
+    }
+
+    // Fall back to static credentials
     return this.credentials.get(registry);
+  }
+
+  private isECRRegistry(registry: string): boolean {
+    // ECR registries follow the pattern: {account-id}.dkr.ecr.{region}.amazonaws.com
+    return /^\d+\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com$/.test(registry);
   }
 
   private async getAuthToken(registry: string, repository: string): Promise<string | undefined> {
@@ -36,7 +57,18 @@ export class RegistryService {
       let authUrl: string;
       let authHeader: string | undefined;
 
-      if (registry === 'docker.io') {
+      if (this.isECRRegistry(registry)) {
+        // AWS ECR - uses Basic auth directly (no separate token endpoint)
+        // The ECR authorization token IS the password for Basic auth
+        if (creds) {
+          logger.debug(`Using ECR Basic auth for ${registry}`);
+          // ECR tokens are already in the format needed - just use password as bearer token
+          return creds.password;
+        } else {
+          logger.warn(`⚠️  No ECR credentials available for ${registry}`);
+          return undefined;
+        }
+      } else if (registry === 'docker.io') {
         // Docker Hub
         authUrl = `https://auth.docker.io/token?service=registry.docker.io&scope=repository:${repository}:pull`;
         if (creds) {

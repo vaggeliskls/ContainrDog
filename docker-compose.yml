@@ -103,6 +103,34 @@ services:
       - GITOPS_COMMANDS=["ls -la"]
       - GITOPS_CLONE_PATH=/tmp/webdav-server
 
+      # AWS ECR Configuration - Automatic authentication with AWS Elastic Container Registry
+      # Enable ECR authentication (default: false)
+      # - ECR_ENABLED=true
+
+      # AWS Region (required if ECR_ENABLED=true)
+      # Can use ECR_REGION, AWS_REGION, or AWS_DEFAULT_REGION
+      # - ECR_REGION=eu-west-2
+      # - AWS_REGION=eu-west-2
+
+      # AWS Credentials (optional - uses IAM role if not provided)
+      # Can use ECR_ACCESS_KEY_ID/ECR_SECRET_ACCESS_KEY or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY
+      # - ECR_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+      # - ECR_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+      # - AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+      # - AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+
+      # ECR token refresh interval (default: 6h, ECR tokens expire in 12h)
+      # Supports: "6h", "30m", "3600s"
+      # - ECR_AUTH_REFRESH_INTERVAL=6h
+
+      # ECR registries to authenticate (optional - comma-separated list)
+      # If not specified, will auto-detect from ECR_ACCOUNT_ID or AWS_ACCOUNT_ID
+      # - ECR_REGISTRIES=123456789012.dkr.ecr.us-east-1.amazonaws.com,987654321098.dkr.ecr.eu-west-1.amazonaws.com
+
+      # AWS Account ID (optional - used to auto-generate registry URL)
+      # - ECR_ACCOUNT_ID=123456789012
+      # - AWS_ACCOUNT_ID=123456789012
+
     labels:
       # Prevent self-monitoring
       - containrdog-enabled=false

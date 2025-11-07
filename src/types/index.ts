@@ -58,12 +58,22 @@ export interface Config {
   autoUpdate: boolean; // Global auto-update setting
   webhook?: WebhookConfig; // Webhook notifications
   gitops?: GitOpsConfig; // GitOps configuration
+  ecr?: ECRConfig; // AWS ECR configuration
 }
 
 export interface RegistryCredentials {
   registry: string;
   username: string;
   password: string;
+}
+
+export interface ECRConfig {
+  enabled: boolean;
+  region: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+  authRefreshInterval: number; // in milliseconds
+  registries: string[]; // List of ECR registry URLs to authenticate
 }
 
 export interface ContainerInfo {

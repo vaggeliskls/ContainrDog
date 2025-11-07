@@ -6,7 +6,7 @@ import { WebhookService } from './webhook-service';
 import { GitService } from './git-service';
 import { logger } from '../utils/logger';
 import { getConfig } from '../utils/config';
-import { ImageUpdateInfo, GitChangeInfo, ContainerInfo } from '../types';
+import { ImageUpdateInfo, GitChangeInfo, ContainerInfo, RegistryCredentials } from '../types';
 import { ImageParser } from '../utils/image-parser';
 import { minimatch } from 'minimatch';
 
@@ -41,6 +41,10 @@ export class MonitorService {
       this.gitService = new GitService(config.gitops);
       logger.info('📦 GitOps monitoring enabled');
     }
+  }
+
+  public setECRCredentials(ecrCredentials: Map<string, RegistryCredentials>): void {
+    this.registryService.setECRCredentials(ecrCredentials);
   }
 
   async initialize(): Promise<boolean> {

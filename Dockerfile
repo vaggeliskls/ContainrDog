@@ -13,6 +13,7 @@ RUN apk add --no-cache \
     git \
     openssh-client \
     make \
+    jq \
     shadow \
     && rm -rf /var/cache/apk/*
 

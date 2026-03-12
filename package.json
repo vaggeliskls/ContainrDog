@@ -23,6 +23,7 @@
   "license": "MIT",
   "dependencies": {
     "@aws-sdk/client-ecr": "^3.709.0",
+    "@kubernetes/client-node": "^0.21.0",
     "axios": "^1.7.9",
     "dockerode": "^4.0.2",
     "minimatch": "^10.0.3",

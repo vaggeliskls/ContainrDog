@@ -1,3 +1,8 @@
+export enum ContainerRuntime {
+  DOCKER = 'docker',
+  KUBERNETES = 'kubernetes',
+}
+
 export enum UpdatePolicy {
   ALL = 'all',
   MAJOR = 'major',
@@ -44,10 +49,11 @@ export interface GitOpsConfig {
 }
 
 export interface Config {
+  runtime: ContainerRuntime;
   interval: number; // in milliseconds
   labeledOnly: boolean;
   label: string;
-  socketPath: string;
+  socketPath: string; // Docker/Podman socket path (unused for Kubernetes)
   registryCredentials?: RegistryCredentials[];
   updateCommands?: string[]; // Deprecated: use preUpdateCommands and postUpdateCommands
   preUpdateCommands?: string[]; // Commands to run before update
@@ -60,12 +66,19 @@ export interface Config {
   webhook?: WebhookConfig; // Webhook notifications
   gitops?: GitOpsConfig; // GitOps configuration
   ecr?: ECRConfig; // AWS ECR configuration
+  kubernetes?: KubernetesConfig; // Kubernetes configuration
 }
 
 export interface RegistryCredentials {
   registry: string;
   username: string;
   password: string;
+}
+
+export interface KubernetesConfig {
+  namespaces: string[]; // Namespaces to monitor (default: ['default'])
+  allNamespaces?: boolean; // Monitor all namespaces (overrides namespaces)
+  kubeconfigPath?: string; // Path to kubeconfig (default: in-cluster or ~/.kube/config)
 }
 
 export interface ECRConfig {
@@ -102,6 +115,11 @@ export interface ContainerInfo {
   gitopsCommands?: string[]; // GitOps commands for this container
   gitopsClonePath?: string; // Per-container clone path
   gitopsQuietMode?: boolean; // Per-container quiet mode
+  // Kubernetes-specific fields
+  namespace?: string; // K8s namespace
+  workloadKind?: string; // 'Deployment', 'StatefulSet', 'DaemonSet'
+  workloadName?: string; // Name of the owning workload
+  containerName?: string; // Name of the container within the pod
 }
 
 export interface ImageInfo {

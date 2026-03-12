@@ -3,16 +3,16 @@ import { ContainerInfo, ImageInfo, ImageUpdateInfo, UpdateType, UpdatePolicy } f
 import { logger } from '../utils/logger';
 import { ImageParser } from '../utils/image-parser';
 import { RegistryService } from './registry-service';
-import { DockerClient } from './docker-client';
+import { IRuntimeClient } from './runtime-client';
 import { getConfig } from '../utils/config';
 
 export class UpdateChecker {
   private registryService: RegistryService;
-  private dockerClient: DockerClient;
+  private runtimeClient: IRuntimeClient;
 
-  constructor(registryService: RegistryService, dockerClient: DockerClient) {
+  constructor(registryService: RegistryService, runtimeClient: IRuntimeClient) {
     this.registryService = registryService;
-    this.dockerClient = dockerClient;
+    this.runtimeClient = runtimeClient;
   }
 
   async checkForUpdates(containers: ContainerInfo[]): Promise<ImageUpdateInfo[]> {
@@ -207,7 +207,7 @@ export class UpdateChecker {
       // Otherwise, we'd need to check all tags (not implemented here for simplicity)
 
       // Get current local image digest
-      const localDigest = await this.dockerClient.getImageDigest(container.image);
+      const localDigest = await this.runtimeClient.getImageDigest(container.image);
 
       // Get remote image manifest for the current tag
       const remoteManifest = await this.registryService.getImageManifest(currentImage);

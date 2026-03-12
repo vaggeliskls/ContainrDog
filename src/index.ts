@@ -1,8 +1,12 @@
 import cron from 'node-cron';
 import { MonitorService } from './services/monitor-service';
 import { ECRAuthService } from './services/ecr-auth-service';
+import { DockerClient } from './services/docker-client';
+import { KubernetesClient } from './services/kubernetes-client';
+import { IRuntimeClient } from './services/runtime-client';
 import { logger } from './utils/logger';
 import { getConfig } from './utils/config';
+import { ContainerRuntime } from './types';
 
 class ContainerUpdater {
   private monitorService: MonitorService;
@@ -12,12 +16,21 @@ class ContainerUpdater {
   private config = getConfig();
 
   constructor() {
-    this.monitorService = new MonitorService();
+    const runtimeClient = this.createRuntimeClient();
+    this.monitorService = new MonitorService(runtimeClient);
 
-    // Initialize ECR auth service if configured
     if (this.config.ecr?.enabled) {
       this.ecrAuthService = new ECRAuthService();
     }
+  }
+
+  private createRuntimeClient(): IRuntimeClient {
+    if (this.config.runtime === ContainerRuntime.KUBERNETES) {
+      logger.info('☸️  Runtime: Kubernetes');
+      return new KubernetesClient();
+    }
+    logger.info('🐳 Runtime: Docker/Podman');
+    return new DockerClient();
   }
 
   async start(): Promise<void> {
@@ -25,30 +38,23 @@ class ContainerUpdater {
       logger.info('🐾 Starting ContainrDog...');
       this.logConfiguration();
 
-      // Initialize ECR authentication if enabled
       if (this.ecrAuthService) {
         const ecrInitialized = await this.ecrAuthService.initialize();
         if (ecrInitialized) {
-          // Provide ECR credentials to the monitor service's registry service
           this.monitorService.setECRCredentials(this.ecrAuthService.getCredentials());
         }
       }
 
-      // Initialize the monitor service
       const initialized = await this.monitorService.initialize();
       if (!initialized) {
         logger.error('❌ Failed to initialize monitor service. Exiting...');
         process.exit(1);
       }
 
-      // Run initial check
       logger.info('🔍 Running initial update check...');
       await this.monitorService.runCheck();
 
-      // Setup scheduled checks
       this.setupScheduler();
-
-      // Handle graceful shutdown
       this.setupShutdownHandlers();
 
       logger.info('🐾 ContainrDog is running and watching your containers!');
@@ -64,20 +70,16 @@ class ContainerUpdater {
 
     if (intervalSeconds < 60) {
       logger.info(`⏰ Scheduling checks every ${intervalSeconds} second(s)`);
-      // Use setInterval for sub-minute intervals
       this.intervalId = setInterval(async () => {
         await this.monitorService.runCheck();
       }, intervalMs);
     } else {
-      // Use cron for minute-based intervals (1 minute or more)
       const intervalMinutes = Math.floor(intervalMs / 60000);
       let cronExpression: string;
 
       if (intervalMinutes < 60) {
-        // Run every N minutes
         cronExpression = `*/${intervalMinutes} * * * *`;
       } else {
-        // Run every N hours
         const intervalHours = Math.floor(intervalMinutes / 60);
         cronExpression = `0 */${intervalHours} * * *`;
       }
@@ -98,25 +100,27 @@ class ContainerUpdater {
     } else {
       logger.info(`  ⏱️  Check interval: ${intervalSeconds} second(s)`);
     }
+    logger.info(`  🖥️  Runtime: ${this.config.runtime}`);
+    if (this.config.runtime === ContainerRuntime.KUBERNETES) {
+      const k8s = this.config.kubernetes;
+      if (k8s?.allNamespaces) {
+        logger.info(`  ☸️  Namespaces: all`);
+      } else {
+        logger.info(`  ☸️  Namespaces: ${k8s?.namespaces?.join(', ') || 'default'}`);
+      }
+    } else {
+      logger.info(`  🔌 Socket path: ${this.config.socketPath}`);
+    }
     logger.info(`  📋 Update policy: ${this.config.policy}`);
-    if (this.config.policy === 'force' && this.config.matchTag) {
-      logger.info(`  🏷️  Match tag: ${this.config.matchTag}`);
-    }
-    if (this.config.policy === 'glob' && this.config.globPattern) {
-      logger.info(`  🔍 Glob pattern: ${this.config.globPattern}`);
-    }
     logger.info(`  🏷️  Labeled only: ${this.config.labeledOnly}`);
     if (this.config.labeledOnly) {
       logger.info(`  🔖 Label filter: ${this.config.label}=true`);
     }
-    logger.info(`  🔌 Socket path: ${this.config.socketPath}`);
     logger.info(
       `  🔐 Registry credentials: ${this.config.registryCredentials?.length || 0} configured`
     );
     if (this.config.ecr?.enabled) {
       logger.info(`  🔐 AWS ECR: enabled (region: ${this.config.ecr.region})`);
-      const refreshHours = Math.floor(this.config.ecr.authRefreshInterval / 1000 / 60 / 60);
-      logger.info(`  🔄 ECR token refresh: every ${refreshHours} hour(s)`);
     }
     logger.info(`  💻 Update commands: ${this.config.updateCommands?.length || 0} configured`);
     logger.info(`  📝 Log level: ${this.config.logLevel}`);
@@ -147,7 +151,6 @@ class ContainerUpdater {
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
 
-    // Handle uncaught errors
     process.on('uncaughtException', (error) => {
       logger.error('❌ Uncaught exception:', error);
       process.exit(1);
@@ -160,7 +163,6 @@ class ContainerUpdater {
   }
 }
 
-// Start the application
 const app = new ContainerUpdater();
 app.start().catch((error) => {
   logger.error('❌ Fatal error:', error);

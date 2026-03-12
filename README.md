@@ -60,6 +60,7 @@ metadata:
 
 | Topic | Description |
 |-------|-------------|
+| [Examples](docs/examples.md) | Full working examples for Docker and Kubernetes |
 | [Runtimes](docs/runtimes.md) | Docker, Podman, and Kubernetes setup |
 | [Helm Chart](docs/helm.md) | Deploy on Kubernetes with Helm |
 | [Configuration](docs/configuration.md) | All environment variables |

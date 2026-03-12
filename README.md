@@ -61,6 +61,7 @@ metadata:
 | Topic | Description |
 |-------|-------------|
 | [Runtimes](docs/runtimes.md) | Docker, Podman, and Kubernetes setup |
+| [Helm Chart](docs/helm.md) | Deploy on Kubernetes with Helm |
 | [Configuration](docs/configuration.md) | All environment variables |
 | [Update Policies](docs/update-policies.md) | `major`, `minor`, `patch`, `force`, `glob` |
 | [Labels & Annotations](docs/labels.md) | Per-container control |

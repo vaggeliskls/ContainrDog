@@ -2,7 +2,34 @@
 
 ContainrDog needs read access to registries to check for newer image versions.
 
-## Docker Config File (Recommended)
+## Kubernetes (recommended)
+
+Reuse the same `kubernetes.io/dockerconfigjson` Secret you already use for `imagePullSecrets`. ContainrDog mounts it and reads credentials from it — no duplication:
+
+```bash
+kubectl create secret docker-registry my-pull-secret \
+  --docker-server=ghcr.io \
+  --docker-username=myuser \
+  --docker-password=ghp_token \
+  -n containrdog
+```
+
+```yaml
+# helm values
+registry:
+  existingPullSecret: my-pull-secret
+```
+
+The same secret works in your workload `imagePullSecrets` unchanged:
+```yaml
+spec:
+  imagePullSecrets:
+    - name: my-pull-secret
+```
+
+---
+
+## Docker Config File
 
 Mount your Docker credentials file:
 

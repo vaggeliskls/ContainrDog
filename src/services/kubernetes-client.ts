@@ -42,11 +42,9 @@ export class KubernetesClient implements IRuntimeClient {
 
   async ping(): Promise<boolean> {
     try {
-      const config = getConfig();
-      const ns = config.kubernetes?.namespaces?.[0] || 'default';
-      await this.coreV1Api.listNamespacedPod(
-        ns, undefined, undefined, undefined, undefined, undefined, 1
-      );
+      // Check API server reachability without depending on any specific namespace existing
+      const versionApi = this.kc.makeApiClient(k8s.VersionApi);
+      await versionApi.getCode();
       return true;
     } catch (error) {
       logger.error('❌ Failed to connect to Kubernetes API:', error);
@@ -70,8 +68,12 @@ export class KubernetesClient implements IRuntimeClient {
       } else {
         const namespaces = k8sConfig?.namespaces || ['default'];
         for (const ns of namespaces) {
-          const response = await this.coreV1Api.listNamespacedPod(ns);
-          pods.push(...response.body.items);
+          try {
+            const response = await this.coreV1Api.listNamespacedPod(ns);
+            pods.push(...response.body.items);
+          } catch (error) {
+            logger.warn(`⚠️  Skipping namespace "${ns}": ${error instanceof Error ? error.message : error}`);
+          }
         }
       }
 

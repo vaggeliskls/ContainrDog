@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/logo.png" alt="ContainrDog Logo" width="300"/>
 
-  # ContainrDog 🐕
+  # ContainrDog
 
   **Automated container image update monitor for Docker, Podman, and Kubernetes**
 
@@ -23,37 +23,41 @@
 
 ## Quick Start
 
+**Docker Compose**
 ```bash
-# Docker Compose (recommended)
 docker-compose up -d
+```
 
-# Docker
+**Docker**
+```bash
 docker run -d \
   --name containrdog \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
   -e INTERVAL=5m \
   ghcr.io/vaggeliskls/containrdog
-
-# Kubernetes
-docker run -d \
-  --name containrdog \
-  -e RUNTIME=kubernetes \
-  -e K8S_NAMESPACES=default,production \
-  -v ~/.kube/config:/root/.kube/config:ro \
-  ghcr.io/vaggeliskls/containrdog
 ```
 
-Label your containers to opt in (when `LABELED=true`):
+Opt containers in with a label:
 ```yaml
 labels:
   - containrdog-enabled=true
 ```
 
-For Kubernetes, use annotations on your Deployment/StatefulSet/DaemonSet:
+**Kubernetes (Helm)**
+```bash
+helm install containrdog ./helm \
+  --namespace containrdog \
+  --create-namespace \
+  --set kubernetes.namespaces="{default}"
+```
+
+Opt workloads in with an annotation on the pod template:
 ```yaml
-metadata:
-  annotations:
-    containrdog-enabled: "true"
+spec:
+  template:
+    metadata:
+      annotations:
+        containrdog-enabled: "true"
 ```
 
 ## Documentation

@@ -26,13 +26,8 @@ export class KubernetesClient implements IRuntimeClient {
       this.kc.loadFromFile(config.kubernetes.kubeconfigPath);
       logger.info(`☸️  Using kubeconfig: ${config.kubernetes.kubeconfigPath}`);
     } else {
-      try {
-        this.kc.loadFromCluster();
-        logger.info('☸️  Using in-cluster Kubernetes configuration');
-      } catch {
-        this.kc.loadFromDefault();
-        logger.info('☸️  Using default Kubernetes configuration (~/.kube/config)');
-      }
+      this.kc.loadFromDefault();
+      logger.info('☸️  Using default Kubernetes configuration');
     }
 
     this.coreV1Api = this.kc.makeApiClient(k8s.CoreV1Api);

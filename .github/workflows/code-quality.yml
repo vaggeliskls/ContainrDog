@@ -67,6 +67,8 @@ jobs:
         run: npm run test:integration -- tests/integration/kubernetes-client.test.ts
         env:
           INTEGRATION_TESTS: 'true'
+          RUNTIME: kubernetes
+          KUBECONFIG: /home/runner/.kube/config
 
       - name: Run Docker E2E tests
         run: bash tests/e2e/docker/run.sh

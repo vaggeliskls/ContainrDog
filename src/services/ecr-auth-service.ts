@@ -31,7 +31,7 @@ export class ECRAuthService {
 
     try {
       // Initialize ECR client
-      const clientConfig: any = {
+      const clientConfig: { region: string; credentials?: { accessKeyId: string; secretAccessKey: string } } = {
         region: ecrConfig.region,
       };
 
@@ -73,8 +73,8 @@ export class ECRAuthService {
       }
 
       logger.debug(`Docker login stdout: ${stdout}`);
-    } catch (error: any) {
-      throw new Error(`Failed to execute docker login: ${error.message}`);
+    } catch (error) {
+      throw new Error(`Failed to execute docker login: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -119,8 +119,8 @@ export class ECRAuthService {
         try {
           await this.dockerLogin(registryUrl, username, password);
           logger.info(`  ✅ Docker login successful for ECR registry: ${registryUrl}`);
-        } catch (loginError: any) {
-          logger.error(`  ❌ Docker login failed for ${registryUrl}: ${loginError.message}`);
+        } catch (loginError) {
+          logger.error(`  ❌ Docker login failed for ${registryUrl}: ${loginError instanceof Error ? loginError.message : String(loginError)}`);
           // Continue with other registries even if one fails
         }
 
@@ -139,8 +139,8 @@ export class ECRAuthService {
           }
         }
       }
-    } catch (error: any) {
-      logger.error('❌ Failed to authenticate with ECR:', error.message || error);
+    } catch (error) {
+      logger.error('❌ Failed to authenticate with ECR:', error instanceof Error ? error.message : error);
       throw error;
     }
   }

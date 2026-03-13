@@ -52,8 +52,7 @@ export class WebhookService {
     }
   }
 
-  private buildPayload(update: ImageUpdateInfo, success: boolean, error?: string): any {
-    const container = update.container;
+  private buildPayload(update: ImageUpdateInfo, success: boolean, error?: string): Record<string, unknown> {
     const status = success ? 'Success' : 'Failed';
     const emoji = success ? '✅' : '❌';
 
@@ -74,9 +73,9 @@ export class WebhookService {
     status: string,
     emoji: string,
     error?: string
-  ): any {
+  ): Record<string, unknown> {
     const container = update.container;
-    const fields: any[] = [
+    const fields: Record<string, unknown>[] = [
       {
         title: 'Container',
         value: container.name,
@@ -125,9 +124,9 @@ export class WebhookService {
     status: string,
     emoji: string,
     error?: string
-  ): any {
+  ): Record<string, unknown> {
     const container = update.container;
-    const fields: any[] = [
+    const fields: Record<string, unknown>[] = [
       {
         name: 'Container',
         value: container.name,
@@ -178,7 +177,7 @@ export class WebhookService {
     status: string,
     emoji: string,
     error?: string
-  ): any {
+  ): Record<string, unknown> {
     const container = update.container;
     const facts: any[] = [
       {
@@ -224,9 +223,9 @@ export class WebhookService {
   private buildGenericPayload(
     update: ImageUpdateInfo,
     status: string,
-    emoji: string,
+    _emoji: string,
     error?: string
-  ): any {
+  ): Record<string, unknown> {
     const container = update.container;
     return {
       event: 'container_update',
@@ -246,7 +245,7 @@ export class WebhookService {
     };
   }
 
-  private buildCheckPayload(containersChecked: number, updatesFound: number): any {
+  private buildCheckPayload(containersChecked: number, updatesFound: number): Record<string, unknown> {
     switch (this.config.provider) {
       case WebhookProvider.SLACK:
         return {

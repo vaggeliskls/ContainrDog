@@ -33,7 +33,7 @@ jobs:
       - name: Test
         run: npm run test:coverage
 
-  test-integration-docker:
+  test:
     needs: quality
     runs-on: ubuntu-latest
     steps:
@@ -48,55 +48,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Run Docker integration tests
-        run: npm run test:integration -- tests/integration/docker-client.test.ts
-        env:
-          INTEGRATION_TESTS: 'true'
-
-  test-integration-k8s:
-    needs: quality
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install k3d
-        run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
-
-      - name: Run Kubernetes integration tests
-        run: npm run test:integration -- tests/integration/kubernetes-client.test.ts
-        env:
-          INTEGRATION_TESTS: 'true'
-
-  test-e2e-docker:
-    needs: quality
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Run Docker E2E tests
-        run: bash tests/e2e/docker/run.sh
-
-  test-e2e-k8s:
-    needs: quality
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -106,6 +57,19 @@ jobs:
 
       - name: Install Helm
         uses: azure/setup-helm@v4
+
+      - name: Run Docker integration tests
+        run: npm run test:integration -- tests/integration/docker-client.test.ts
+        env:
+          INTEGRATION_TESTS: 'true'
+
+      - name: Run Kubernetes integration tests
+        run: npm run test:integration -- tests/integration/kubernetes-client.test.ts
+        env:
+          INTEGRATION_TESTS: 'true'
+
+      - name: Run Docker E2E tests
+        run: bash tests/e2e/docker/run.sh
 
       - name: Run Kubernetes E2E tests
         run: bash tests/e2e/kubernetes/run.sh

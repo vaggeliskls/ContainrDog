@@ -1,6 +1,6 @@
 import simpleGit, { SimpleGit, SimpleGitOptions } from 'simple-git';
 import { minimatch } from 'minimatch';
-import { existsSync, mkdirSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync } from 'fs';
 import { logger } from '../utils/logger';
 import { GitOpsConfig, GitAuthType, GitChangeInfo } from '../types';
 

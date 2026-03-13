@@ -38,7 +38,6 @@ export class UpdateChecker {
 
     // Use container-specific policy or fall back to global policy
     const policy = container.policy || config.policy;
-    const matchTag = container.matchTag !== undefined ? container.matchTag : config.matchTag;
     const globPattern = container.globPattern || config.globPattern;
 
     logger.debug(
@@ -201,8 +200,6 @@ export class UpdateChecker {
     currentImage: ImageInfo
   ): Promise<ImageUpdateInfo | null> {
     try {
-      const config = getConfig();
-
       // For force policy with matchTag, only check the current tag
       // Otherwise, we'd need to check all tags (not implemented here for simplicity)
 

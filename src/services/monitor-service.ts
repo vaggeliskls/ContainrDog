@@ -8,7 +8,7 @@ import { GitService } from './git-service';
 import { logger } from '../utils/logger';
 import { getConfig } from '../utils/config';
 import { extractRepoName } from '../utils/label-parser';
-import { ImageUpdateInfo, GitChangeInfo, ContainerInfo, RegistryCredentials } from '../types';
+import { ImageUpdateInfo, GitChangeInfo, ContainerInfo, RegistryCredentials, GitAuthType } from '../types';
 import { ImageParser } from '../utils/image-parser';
 import { minimatch } from 'minimatch';
 
@@ -295,7 +295,7 @@ export class MonitorService {
           enabled: true,
           repoUrl: container.gitopsRepoUrl!,
           branch: container.gitopsBranch || 'main',
-          authType: container.gitopsAuthType || config.gitops?.authType || 'none' as any,
+          authType: container.gitopsAuthType || config.gitops?.authType || GitAuthType.NONE,
           token: container.gitopsToken || config.gitops?.token,
           sshKeyPath: container.gitopsSshKeyPath || config.gitops?.sshKeyPath,
           pollInterval: container.gitopsPollInterval || 60000,

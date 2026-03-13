@@ -164,7 +164,8 @@ export class ConfigManager {
         if (config.auths) {
           // Parse Docker config.json format
           const credentials: RegistryCredentials[] = [];
-          for (const [registry, authData] of Object.entries<any>(config.auths)) {
+          type DockerAuthEntry = { auth?: string; username?: string; password?: string };
+          for (const [registry, authData] of Object.entries(config.auths as Record<string, DockerAuthEntry>)) {
             if (authData.auth) {
               // Decode base64 auth string
               const decoded = Buffer.from(authData.auth, 'base64').toString('utf-8');

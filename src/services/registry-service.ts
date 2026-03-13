@@ -137,13 +137,14 @@ export class RegistryService {
         tag,
         created: response.data.config?.created,
       };
-    } catch (error: any) {
-      if (error.response?.status === 404) {
+    } catch (error) {
+      const axiosError = error as { response?: { status?: number }; message?: string };
+      if (axiosError.response?.status === 404) {
         logger.warn(`⚠️  Image not found in registry: ${imageInfo.repository}:${imageInfo.tag}`);
       } else {
         logger.error(
           `❌ Failed to get manifest for ${imageInfo.repository}:${imageInfo.tag}:`,
-          error.message
+          axiosError.message
         );
       }
       return null;

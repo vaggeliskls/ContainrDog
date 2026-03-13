@@ -1,5 +1,5 @@
 import Docker from 'dockerode';
-import { ContainerInfo, GitAuthType } from '../types';
+import { ContainerInfo } from '../types';
 import { IRuntimeClient } from './runtime-client';
 import { logger } from '../utils/logger';
 import { getConfig } from '../utils/config';
@@ -135,7 +135,7 @@ export class DockerClient implements IRuntimeClient {
 
         this.docker.modem.followProgress(
           stream,
-          (err, _output) => {
+          (err, _) => {
             if (err) {
               logger.error(`❌ Error during image pull ${imageName}:`, err);
               reject(err);

@@ -26,6 +26,34 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+  helm-publish:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Login to GitHub Container Registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io \
+            --username ${{ github.actor }} \
+            --password-stdin
+
+      - name: Package Helm chart
+        run: |
+          helm package helm \
+            --version ${{ needs.release-please.outputs.tag_name }} \
+            --app-version ${{ needs.release-please.outputs.tag_name }}
+
+      - name: Push Helm chart to GHCR
+        run: |
+          helm push containrdog-${{ needs.release-please.outputs.tag_name }}.tgz \
+            oci://ghcr.io/${{ github.repository_owner }}/charts
+
   build-and-push:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}

@@ -2,7 +2,19 @@
   "packages": {
     ".": {
       "release-type": "simple",
-      "include-v-in-tag": false
+      "include-v-in-tag": false,
+      "extra-files": [
+        {
+          "type": "yaml",
+          "path": "helm/Chart.yaml",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "yaml",
+          "path": "helm/Chart.yaml",
+          "jsonpath": "$.appVersion"
+        }
+      ]
     }
   }
 }

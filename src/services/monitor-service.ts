@@ -464,8 +464,21 @@ export class MonitorService {
       if (!quietMode) {
         logger.info(`   ✅ GitOps commands completed for ${container.name}`);
       }
+
+      if (this.webhookService) {
+        await this.webhookService.sendGitOpsNotification(container, changes, true);
+      }
     } catch (error) {
       logger.error(`   ❌ GitOps commands failed for ${container.name}:`, error);
+
+      if (this.webhookService) {
+        await this.webhookService.sendGitOpsNotification(
+          container,
+          changes,
+          false,
+          error instanceof Error ? error.message : String(error)
+        );
+      }
     }
   }
 

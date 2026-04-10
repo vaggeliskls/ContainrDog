@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
-import { WebhookConfig, WebhookProvider, ImageUpdateInfo } from '../types';
+import { WebhookConfig, WebhookProvider, ImageUpdateInfo, ContainerInfo, GitChangeInfo } from '../types';
 import { logger } from '../utils/logger';
 
 export class WebhookService {
@@ -35,6 +35,25 @@ export class WebhookService {
       logger.debug('📨 Webhook notification sent successfully');
     } catch (err) {
       logger.warn(`⚠️  Failed to send webhook notification: ${err}`);
+    }
+  }
+
+  async sendGitOpsNotification(
+    container: ContainerInfo,
+    changes: GitChangeInfo,
+    success: boolean,
+    error?: string
+  ): Promise<void> {
+    try {
+      if (!this.config.notifyOnGitops) {
+        return;
+      }
+
+      const payload = this.buildGitOpsPayload(container, changes, success, error);
+      await this.axiosInstance.post(this.config.url, payload);
+      logger.debug('📨 Webhook GitOps notification sent successfully');
+    } catch (err) {
+      logger.warn(`⚠️  Failed to send webhook GitOps notification: ${err}`);
     }
   }
 
@@ -243,6 +262,94 @@ export class WebhookService {
       },
       error: error || null,
     };
+  }
+
+  private buildGitOpsPayload(
+    container: ContainerInfo,
+    changes: GitChangeInfo,
+    success: boolean,
+    error?: string
+  ): Record<string, unknown> {
+    const status = success ? 'Success' : 'Failed';
+    const emoji = success ? '✅' : '❌';
+
+    switch (this.config.provider) {
+      case WebhookProvider.SLACK:
+        return {
+          text: `${emoji} ContainrDog GitOps: ${container.name}`,
+          attachments: [
+            {
+              color: success ? 'good' : 'danger',
+              fields: [
+                { title: 'Container', value: container.name, short: true },
+                { title: 'Status', value: status, short: true },
+                { title: 'Commit', value: changes.currentCommit.substring(0, 7), short: true },
+                { title: 'Message', value: changes.commitMessage, short: true },
+                { title: 'Files Changed', value: changes.changedFiles.length.toString(), short: true },
+                ...(error ? [{ title: 'Error', value: error, short: false }] : []),
+              ],
+              footer: '🐾 ContainrDog',
+              ts: Math.floor(Date.now() / 1000),
+            },
+          ],
+        };
+
+      case WebhookProvider.DISCORD:
+        return {
+          embeds: [
+            {
+              title: `${emoji} ContainrDog GitOps: ${container.name}`,
+              color: success ? 0x00ff00 : 0xff0000,
+              fields: [
+                { name: 'Container', value: container.name, inline: true },
+                { name: 'Status', value: status, inline: true },
+                { name: 'Commit', value: changes.currentCommit.substring(0, 7), inline: true },
+                { name: 'Message', value: changes.commitMessage, inline: false },
+                { name: 'Files Changed', value: changes.changedFiles.length.toString(), inline: true },
+                ...(error ? [{ name: 'Error', value: error, inline: false }] : []),
+              ],
+              footer: { text: '🐾 ContainrDog' },
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        };
+
+      case WebhookProvider.TEAMS:
+        return {
+          '@type': 'MessageCard',
+          '@context': 'https://schema.org/extensions',
+          summary: `${emoji} ContainrDog GitOps: ${container.name}`,
+          themeColor: success ? '00FF00' : 'FF0000',
+          title: `${emoji} ContainrDog GitOps Update`,
+          sections: [
+            {
+              facts: [
+                { name: 'Container', value: container.name },
+                { name: 'Status', value: status },
+                { name: 'Commit', value: changes.currentCommit.substring(0, 7) },
+                { name: 'Message', value: changes.commitMessage },
+                { name: 'Files Changed', value: changes.changedFiles.length.toString() },
+                ...(error ? [{ name: 'Error', value: error }] : []),
+              ],
+            },
+          ],
+        };
+
+      default:
+        return {
+          event: 'gitops_deploy',
+          status: status.toLowerCase(),
+          timestamp: new Date().toISOString(),
+          container: { id: container.id, name: container.name, image: container.image },
+          changes: {
+            commit: changes.currentCommit,
+            previousCommit: changes.previousCommit,
+            message: changes.commitMessage,
+            filesChanged: changes.changedFiles.length,
+          },
+          error: error || null,
+        };
+    }
   }
 
   private buildCheckPayload(containersChecked: number, updatesFound: number): Record<string, unknown> {

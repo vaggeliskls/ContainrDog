@@ -1,3 +1,8 @@
+export enum ContainerRuntime {
+  DOCKER = 'docker',
+  KUBERNETES = 'kubernetes',
+}
+
 export enum UpdatePolicy {
   ALL = 'all',
   MAJOR = 'major',
@@ -27,6 +32,7 @@ export interface WebhookConfig {
   notifyOnSuccess?: boolean; // Notify when update succeeds (default: true)
   notifyOnFailure?: boolean; // Notify when update fails (default: true)
   notifyOnCheck?: boolean; // Notify on every check (default: false)
+  notifyOnGitops?: boolean; // Notify when GitOps deploys changes (default: true)
 }
 
 export interface GitOpsConfig {
@@ -44,10 +50,11 @@ export interface GitOpsConfig {
 }
 
 export interface Config {
+  runtime: ContainerRuntime;
   interval: number; // in milliseconds
   labeledOnly: boolean;
   label: string;
-  socketPath: string;
+  socketPath: string; // Docker/Podman socket path (unused for Kubernetes)
   registryCredentials?: RegistryCredentials[];
   updateCommands?: string[]; // Deprecated: use preUpdateCommands and postUpdateCommands
   preUpdateCommands?: string[]; // Commands to run before update
@@ -57,15 +64,23 @@ export interface Config {
   matchTag: boolean; // For force policy: only update if same tag
   globPattern?: string; // For glob policy
   autoUpdate: boolean; // Global auto-update setting
+  imageLabelKey?: string; // Image label to display in notifications (e.g. org.opencontainers.image.revision)
   webhook?: WebhookConfig; // Webhook notifications
   gitops?: GitOpsConfig; // GitOps configuration
   ecr?: ECRConfig; // AWS ECR configuration
+  kubernetes?: KubernetesConfig; // Kubernetes configuration
 }
 
 export interface RegistryCredentials {
   registry: string;
   username: string;
   password: string;
+}
+
+export interface KubernetesConfig {
+  namespaces: string[]; // Namespaces to monitor (default: ['default'])
+  allNamespaces?: boolean; // Monitor all namespaces (overrides namespaces)
+  kubeconfigPath?: string; // Path to kubeconfig (default: in-cluster or ~/.kube/config)
 }
 
 export interface ECRConfig {
@@ -88,6 +103,7 @@ export interface ContainerInfo {
   matchTag?: boolean;
   globPattern?: string;
   autoUpdate?: boolean;
+  imageLabelKey?: string;
   updateCommands?: string[]; // Deprecated: use preUpdateCommands and postUpdateCommands
   preUpdateCommands?: string[]; // Commands to run before update
   postUpdateCommands?: string[]; // Commands to run after update
@@ -102,6 +118,11 @@ export interface ContainerInfo {
   gitopsCommands?: string[]; // GitOps commands for this container
   gitopsClonePath?: string; // Per-container clone path
   gitopsQuietMode?: boolean; // Per-container quiet mode
+  // Kubernetes-specific fields
+  namespace?: string; // K8s namespace
+  workloadKind?: string; // 'Deployment', 'StatefulSet', 'DaemonSet'
+  workloadName?: string; // Name of the owning workload
+  containerName?: string; // Name of the container within the pod
 }
 
 export interface ImageInfo {
@@ -116,6 +137,9 @@ export interface ImageUpdateInfo {
   currentImage: ImageInfo;
   availableImage: ImageInfo;
   updateType: UpdateType;
+  imageLabelKey?: string;
+  currentLabelValue?: string;
+  availableLabelValue?: string;
 }
 
 export enum UpdateType {

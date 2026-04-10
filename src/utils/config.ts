@@ -1,5 +1,6 @@
-import { Config, RegistryCredentials, UpdatePolicy, WebhookConfig, WebhookProvider, GitOpsConfig, GitAuthType, ECRConfig } from '../types';
+import { Config, RegistryCredentials, UpdatePolicy, WebhookConfig, WebhookProvider, GitOpsConfig, GitAuthType, ECRConfig, ContainerRuntime, KubernetesConfig } from '../types';
 import { readFileSync, existsSync } from 'fs';
+import { extractRepoName } from './label-parser';
 
 export class ConfigManager {
   private static instance: ConfigManager;
@@ -54,6 +55,9 @@ export class ConfigManager {
     // Auto-update (default: true)
     const autoUpdate = process.env.AUTO_UPDATE !== 'false';
 
+    // Image label to display in notifications (optional)
+    const imageLabelKey = process.env.IMAGE_LABEL || undefined;
+
     // Webhook configuration
     const webhook = this.parseWebhookConfig();
 
@@ -63,7 +67,14 @@ export class ConfigManager {
     // ECR configuration
     const ecr = this.parseECRConfig();
 
+    // Runtime selection
+    const runtime = this.parseRuntime();
+
+    // Kubernetes configuration
+    const kubernetes = this.parseKubernetesConfig();
+
     return {
+      runtime,
       interval,
       labeledOnly,
       label,
@@ -77,9 +88,11 @@ export class ConfigManager {
       matchTag,
       globPattern,
       autoUpdate,
+      imageLabelKey,
       webhook,
       gitops,
       ecr,
+      kubernetes,
     };
   }
 
@@ -155,7 +168,8 @@ export class ConfigManager {
         if (config.auths) {
           // Parse Docker config.json format
           const credentials: RegistryCredentials[] = [];
-          for (const [registry, authData] of Object.entries<any>(config.auths)) {
+          type DockerAuthEntry = { auth?: string; username?: string; password?: string };
+          for (const [registry, authData] of Object.entries(config.auths as Record<string, DockerAuthEntry>)) {
             if (authData.auth) {
               // Decode base64 auth string
               const decoded = Buffer.from(authData.auth, 'base64').toString('utf-8');
@@ -307,6 +321,7 @@ export class ConfigManager {
     const notifyOnSuccess = process.env.WEBHOOK_NOTIFY_SUCCESS !== 'false'; // default: true
     const notifyOnFailure = process.env.WEBHOOK_NOTIFY_FAILURE !== 'false'; // default: true
     const notifyOnCheck = process.env.WEBHOOK_NOTIFY_CHECK === 'true'; // default: false
+    const notifyOnGitops = process.env.WEBHOOK_NOTIFY_GITOPS !== 'false'; // default: true
 
     return {
       enabled,
@@ -315,6 +330,7 @@ export class ConfigManager {
       notifyOnSuccess,
       notifyOnFailure,
       notifyOnCheck,
+      notifyOnGitops,
     };
   }
 
@@ -387,9 +403,7 @@ export class ConfigManager {
     // Clone path (default: /tmp/{repo-name})
     let clonePath = process.env.GITOPS_CLONE_PATH;
     if (!clonePath) {
-      // Extract repo name from URL
-      const repoName = this.extractRepoName(repoUrl);
-      clonePath = `/tmp/${repoName}`;
+      clonePath = `/tmp/${extractRepoName(repoUrl)}`;
     }
 
     // Quiet mode (default: false - show all output)
@@ -408,6 +422,27 @@ export class ConfigManager {
       clonePath,
       quietMode,
     };
+  }
+
+  private parseRuntime(): ContainerRuntime {
+    const runtimeStr = process.env.RUNTIME?.toLowerCase();
+    if (runtimeStr === 'kubernetes' || runtimeStr === 'k8s') {
+      return ContainerRuntime.KUBERNETES;
+    }
+    return ContainerRuntime.DOCKER;
+  }
+
+  private parseKubernetesConfig(): KubernetesConfig | undefined {
+    if (this.parseRuntime() !== ContainerRuntime.KUBERNETES) {
+      return undefined;
+    }
+
+    const allNamespaces = process.env.K8S_ALL_NAMESPACES === 'true';
+    const namespacesStr = process.env.K8S_NAMESPACES || 'default';
+    const namespaces = namespacesStr.split(',').map((n) => n.trim()).filter((n) => n.length > 0);
+    const kubeconfigPath = process.env.K8S_KUBECONFIG || process.env.KUBECONFIG;
+
+    return { namespaces, allNamespaces, kubeconfigPath };
   }
 
   private parseECRConfig(): ECRConfig | undefined {
@@ -485,24 +520,6 @@ export class ConfigManager {
 
   public getConfig(): Config {
     return this.config;
-  }
-
-  private extractRepoName(url: string): string {
-    // Extract repo name from Git URL
-    // Examples:
-    //   https://github.com/user/repo.git -> repo
-    //   git@github.com:user/repo.git -> repo
-    //   https://github.com/user/repo -> repo
-    try {
-      const match = url.match(/\/([^\/]+?)(\.git)?$/);
-      if (match && match[1]) {
-        return match[1];
-      }
-      // Fallback to generic name
-      return 'gitops-repo';
-    } catch {
-      return 'gitops-repo';
-    }
   }
 
   public reload(): void {

@@ -1,0 +1,219 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "containrdog.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "containrdog.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "containrdog.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "containrdog.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "containrdog.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: containrdog
+          image: "{{ .Values.image.repository }}:{{ include "containrdog.imageTag" . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            # Runtime
+            - name: RUNTIME
+              value: "kubernetes"
+            - name: K8S_NAMESPACES
+              value: {{ .Values.kubernetes.namespaces | join "," | quote }}
+            - name: K8S_ALL_NAMESPACES
+              value: {{ .Values.kubernetes.allNamespaces | quote }}
+
+            # Core
+            - name: INTERVAL
+              value: {{ .Values.config.interval | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.config.logLevel | quote }}
+            - name: POLICY
+              value: {{ .Values.config.policy | quote }}
+            - name: AUTO_UPDATE
+              value: {{ .Values.config.autoUpdate | quote }}
+            - name: LABELED
+              value: {{ .Values.config.labeled | quote }}
+            - name: LABEL
+              value: {{ .Values.config.label | quote }}
+            {{- if .Values.config.globPattern }}
+            - name: GLOB_PATTERN
+              value: {{ .Values.config.globPattern | quote }}
+            {{- end }}
+            {{- if .Values.config.matchTag }}
+            - name: MATCH_TAG
+              value: "true"
+            {{- end }}
+            {{- if .Values.config.imageLabel }}
+            - name: IMAGE_LABEL
+              value: {{ .Values.config.imageLabel | quote }}
+            {{- end }}
+
+            # Hooks
+            {{- if .Values.hooks.preUpdateCommands }}
+            - name: PRE_UPDATE_COMMANDS
+              value: {{ .Values.hooks.preUpdateCommands | toJson | quote }}
+            {{- end }}
+            {{- if .Values.hooks.postUpdateCommands }}
+            - name: POST_UPDATE_COMMANDS
+              value: {{ .Values.hooks.postUpdateCommands | toJson | quote }}
+            {{- end }}
+
+            # Webhooks
+            - name: WEBHOOK_ENABLED
+              value: {{ .Values.webhook.enabled | quote }}
+            {{- if .Values.webhook.enabled }}
+            - name: WEBHOOK_PROVIDER
+              value: {{ .Values.webhook.provider | quote }}
+            - name: WEBHOOK_NOTIFY_SUCCESS
+              value: {{ .Values.webhook.notifyOnSuccess | quote }}
+            - name: WEBHOOK_NOTIFY_FAILURE
+              value: {{ .Values.webhook.notifyOnFailure | quote }}
+            - name: WEBHOOK_NOTIFY_CHECK
+              value: {{ .Values.webhook.notifyOnCheck | quote }}
+            - name: WEBHOOK_NOTIFY_GITOPS
+              value: {{ .Values.webhook.notifyOnGitops | quote }}
+            {{- if .Values.webhook.url }}
+            - name: WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "containrdog.secretName" . }}
+                  key: WEBHOOK_URL
+            {{- end }}
+            {{- end }}
+
+            # GitOps
+            - name: GITOPS_ENABLED
+              value: {{ .Values.gitops.enabled | quote }}
+            {{- if .Values.gitops.enabled }}
+            - name: GITOPS_REPO_URL
+              value: {{ .Values.gitops.repoUrl | quote }}
+            - name: GITOPS_BRANCH
+              value: {{ .Values.gitops.branch | quote }}
+            - name: GITOPS_AUTH_TYPE
+              value: {{ .Values.gitops.authType | quote }}
+            - name: GITOPS_POLL_INTERVAL
+              value: {{ .Values.gitops.pollInterval | quote }}
+            - name: GITOPS_QUIET_MODE
+              value: {{ .Values.gitops.quietMode | quote }}
+            {{- if .Values.gitops.watchPaths }}
+            - name: GITOPS_WATCH_PATHS
+              value: {{ .Values.gitops.watchPaths | toJson | quote }}
+            {{- end }}
+            {{- if .Values.gitops.commands }}
+            - name: GITOPS_COMMANDS
+              value: {{ .Values.gitops.commands | toJson | quote }}
+            {{- end }}
+            {{- if .Values.gitops.clonePath }}
+            - name: GITOPS_CLONE_PATH
+              value: {{ .Values.gitops.clonePath | quote }}
+            {{- end }}
+            {{- if .Values.gitops.sshKeyPath }}
+            - name: GITOPS_SSH_KEY_PATH
+              value: {{ .Values.gitops.sshKeyPath | quote }}
+            {{- end }}
+            {{- if .Values.gitops.token }}
+            - name: GITOPS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "containrdog.secretName" . }}
+                  key: GITOPS_TOKEN
+            {{- end }}
+            {{- end }}
+
+            # ECR
+            - name: ECR_ENABLED
+              value: {{ .Values.ecr.enabled | quote }}
+            {{- if .Values.ecr.enabled }}
+            - name: ECR_REGION
+              value: {{ .Values.ecr.region | quote }}
+            - name: ECR_AUTH_REFRESH_INTERVAL
+              value: {{ .Values.ecr.authRefreshInterval | quote }}
+            {{- if .Values.ecr.registries }}
+            - name: ECR_REGISTRIES
+              value: {{ .Values.ecr.registries | join "," | quote }}
+            {{- end }}
+            {{- if .Values.ecr.accountId }}
+            - name: ECR_ACCOUNT_ID
+              value: {{ .Values.ecr.accountId | quote }}
+            {{- end }}
+            {{- if .Values.ecr.accessKeyId }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "containrdog.secretName" . }}
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "containrdog.secretName" . }}
+                  key: AWS_SECRET_ACCESS_KEY
+            {{- end }}
+            {{- end }}
+
+            # Registry credentials
+            {{- if .Values.registry.existingPullSecret }}
+            # Mount path for the pull secret (parsed as docker config.json)
+            - name: DOCKER_CONFIG_PATH
+              value: /docker-config/.dockerconfigjson
+            {{- else if .Values.registry.credentials }}
+            - name: REGISTRY_CREDENTIALS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "containrdog.secretName" . }}
+                  key: REGISTRY_CREDENTIALS
+            {{- end }}
+
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+
+          {{- if .Values.registry.existingPullSecret }}
+          volumeMounts:
+            - name: docker-config
+              mountPath: /docker-config
+              readOnly: true
+          {{- end }}
+
+      {{- if .Values.registry.existingPullSecret }}
+      volumes:
+        - name: docker-config
+          secret:
+            secretName: {{ .Values.registry.existingPullSecret }}
+      {{- end }}
+
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

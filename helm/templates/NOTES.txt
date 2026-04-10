@@ -1,0 +1,19 @@
+ContainrDog has been deployed to namespace {{ .Release.Namespace }}.
+
+Monitoring namespaces: {{ if .Values.kubernetes.allNamespaces }}all{{ else }}{{ .Values.kubernetes.namespaces | join ", " }}{{ end }}
+Check interval:        {{ .Values.config.interval }}
+Update policy:         {{ .Values.config.policy }}
+Auto-update:           {{ .Values.config.autoUpdate }}
+Labeled only:          {{ .Values.config.labeled }}
+
+To enable monitoring for a workload, add this annotation to its pod template:
+
+  {{ .Values.config.label }}: "true"
+
+Example:
+  kubectl annotate deployment <name> \
+    --namespace <namespace> \
+    {{ .Values.config.label }}=true
+
+View logs:
+  kubectl logs -f deployment/{{ include "containrdog.fullname" . }} -n {{ .Release.Namespace }}

@@ -47,8 +47,8 @@ export class CommandExecutor {
         if (stderr) {
           logger.warn(`⚠️  Command ${i + 1} stderr: ${stderr.trim()}`);
         }
-      } catch (error: any) {
-        logger.error(`❌ Failed to execute command ${i + 1}: ${command}`, error.message);
+      } catch (error) {
+        logger.error(`❌ Failed to execute command ${i + 1}: ${command}`, error instanceof Error ? error.message : String(error));
         // Continue with next command even if one fails
       }
     }
@@ -62,8 +62,8 @@ export class CommandExecutor {
         maxBuffer: 1024 * 1024,
       });
       return stdout.trim();
-    } catch (error: any) {
-      logger.error(`❌ Failed to execute command: ${command}`, error.message);
+    } catch (error) {
+      logger.error(`❌ Failed to execute command: ${command}`, error instanceof Error ? error.message : String(error));
       throw error;
     }
   }

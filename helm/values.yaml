@@ -1,0 +1,127 @@
+image:
+  repository: ghcr.io/vaggeliskls/containrdog
+  tag: ""  # defaults to Chart.appVersion
+  pullPolicy: IfNotPresent
+
+# Number of replicas (keep at 1 — multiple replicas would duplicate updates)
+replicaCount: 1
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+rbac:
+  create: true
+
+# ── Core ──────────────────────────────────────────────────────────────────────
+config:
+  interval: "5m"
+  logLevel: "info"
+  policy: "major"         # all | major | minor | patch | force | glob
+  globPattern: ""         # used with policy=glob
+  matchTag: false         # used with policy=force
+  autoUpdate: true
+  labeled: true           # only monitor annotated workloads
+  label: "containrdog-enabled"
+  # Image label to display in update notifications (optional).
+  # Fetched from the registry for both current and new image.
+  # Silently omitted if the label is not present on the image.
+  # e.g. "org.opencontainers.image.revision"
+  imageLabel: ""
+
+# ── Kubernetes namespaces ─────────────────────────────────────────────────────
+kubernetes:
+  # List of namespaces to monitor. Must exist in the cluster.
+  # Leave empty and set allNamespaces: true to monitor everything.
+  namespaces:
+    - default
+  allNamespaces: false  # set true to ignore namespaces list and scan all
+
+# ── Hooks ─────────────────────────────────────────────────────────────────────
+hooks:
+  preUpdateCommands: []   # e.g. ["echo Starting update for $CONTAINER_NAME"]
+  postUpdateCommands: []  # e.g. ["kubectl rollout status deployment/$CONTAINER_NAME"]
+
+# ── Webhooks ──────────────────────────────────────────────────────────────────
+webhook:
+  enabled: false
+  url: ""                 # set via --set or existingSecret
+  provider: "generic"     # slack | discord | teams | generic
+  notifyOnSuccess: true
+  notifyOnFailure: true
+  notifyOnCheck: false
+  notifyOnGitops: true    # notify when GitOps commands execute (default: true)
+
+# ── GitOps ────────────────────────────────────────────────────────────────────
+gitops:
+  enabled: false
+  repoUrl: ""
+  branch: "main"
+  authType: "none"        # token | ssh | none
+  token: ""               # set via --set or existingSecret
+  sshKeyPath: ""
+  pollInterval: "60s"
+  watchPaths: []          # e.g. ["docker-compose.yml", "config/**"]
+  commands: []            # e.g. ["kubectl apply -f $GITOPS_CLONE_PATH/k8s/"]
+  clonePath: ""
+  quietMode: false
+
+# ── Registry credentials ──────────────────────────────────────────────────────
+registry:
+  # Recommended: name of an existing kubernetes.io/dockerconfigjson Secret.
+  # ContainrDog mounts it and reads credentials from it — same secret you use
+  # for imagePullSecrets on your workloads. No duplication needed.
+  #
+  #   kubectl create secret docker-registry my-pull-secret \
+  #     --docker-server=ghcr.io \
+  #     --docker-username=myuser \
+  #     --docker-password=ghp_token
+  #
+  existingPullSecret: ""
+
+  # Fallback: raw JSON credentials string (not recommended for production).
+  # e.g. '[{"registry":"ghcr.io","username":"user","password":"token"}]'
+  credentials: ""
+
+# ── AWS ECR ───────────────────────────────────────────────────────────────────
+ecr:
+  enabled: false
+  region: ""
+  accessKeyId: ""         # leave empty to use IAM role
+  secretAccessKey: ""
+  registries: []          # e.g. ["123456789.dkr.ecr.us-east-1.amazonaws.com"]
+  accountId: ""           # auto-builds registry URL if registries is empty
+  authRefreshInterval: "6h"
+
+# ── Sensitive values via existing Secret ─────────────────────────────────────
+# Instead of putting secrets in values, reference a pre-created Secret.
+# Keys in the secret become env vars in the pod.
+existingSecret: ""
+
+# ── Pod settings ──────────────────────────────────────────────────────────────
+podAnnotations: {}
+podSecurityContext: {}
+securityContext: {}
+
+resources: {}
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 50m
+  #   memory: 64Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Extra environment variables injected into the pod
+extraEnv: []
+# - name: MY_VAR
+#   value: "my-value"
+# - name: SECRET_VAR
+#   valueFrom:
+#     secretKeyRef:
+#       name: my-secret
+#       key: my-key

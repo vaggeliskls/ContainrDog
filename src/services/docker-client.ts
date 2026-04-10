@@ -1,9 +1,17 @@
 import Docker from 'dockerode';
-import { ContainerInfo, UpdatePolicy, GitAuthType } from '../types';
+import { ContainerInfo } from '../types';
+import { IRuntimeClient } from './runtime-client';
 import { logger } from '../utils/logger';
 import { getConfig } from '../utils/config';
+import {
+  parsePolicyFromLabel,
+  parseAutoUpdateLabel,
+  parseJSONLabel,
+  parseIntervalLabel,
+  parseGitAuthTypeLabel,
+} from '../utils/label-parser';
 
-export class DockerClient {
+export class DockerClient implements IRuntimeClient {
   private docker: Docker;
   private config = getConfig();
 
@@ -30,24 +38,27 @@ export class DockerClient {
           imageId: inspect.Image,
           labels,
           created: inspect.Created ? new Date(inspect.Created).getTime() : 0,
-          policy: this.parsePolicyFromLabel(labels['containrdog.policy']),
+          policy: parsePolicyFromLabel(labels['containrdog.policy']),
           matchTag: labels['containrdog.match-tag'] === 'true',
           globPattern: labels['containrdog.glob-pattern'],
-          autoUpdate: this.parseAutoUpdateLabel(labels['containrdog.auto-update']),
-          updateCommands: this.parseUpdateCommandsLabel(labels['containrdog.update-commands']),
-          preUpdateCommands: this.parseUpdateCommandsLabel(labels['containrdog.pre-update-commands']),
-          postUpdateCommands: this.parseUpdateCommandsLabel(labels['containrdog.post-update-commands']),
-          gitopsEnabled: this.parseGitOpsEnabledLabel(labels['containrdog.gitops-enabled']),
+          autoUpdate: parseAutoUpdateLabel(labels['containrdog.auto-update']),
+          imageLabelKey: labels['containrdog.image-label'] || undefined,
+          updateCommands: parseJSONLabel(labels['containrdog.update-commands']),
+          preUpdateCommands: parseJSONLabel(labels['containrdog.pre-update-commands']),
+          postUpdateCommands: parseJSONLabel(labels['containrdog.post-update-commands']),
+          gitopsEnabled: labels['containrdog.gitops-enabled'] === 'true' ? true : undefined,
           gitopsRepoUrl: labels['containrdog.gitops-repo-url'],
           gitopsBranch: labels['containrdog.gitops-branch'],
-          gitopsAuthType: this.parseGitOpsAuthTypeLabel(labels['containrdog.gitops-auth-type']),
+          gitopsAuthType: parseGitAuthTypeLabel(labels['containrdog.gitops-auth-type']),
           gitopsToken: labels['containrdog.gitops-token'],
           gitopsSshKeyPath: labels['containrdog.gitops-ssh-key-path'],
-          gitopsPollInterval: this.parseIntervalLabel(labels['containrdog.gitops-poll-interval']),
-          gitopsWatchPaths: this.parseUpdateCommandsLabel(labels['containrdog.gitops-watch-paths']),
-          gitopsCommands: this.parseUpdateCommandsLabel(labels['containrdog.gitops-commands']),
+          gitopsPollInterval: parseIntervalLabel(labels['containrdog.gitops-poll-interval']),
+          gitopsWatchPaths: parseJSONLabel(labels['containrdog.gitops-watch-paths']),
+          gitopsCommands: parseJSONLabel(labels['containrdog.gitops-commands']),
           gitopsClonePath: labels['containrdog.gitops-clone-path'],
-          gitopsQuietMode: labels['containrdog.gitops-quiet-mode'] ? labels['containrdog.gitops-quiet-mode'] === 'true' : undefined,
+          gitopsQuietMode: labels['containrdog.gitops-quiet-mode']
+            ? labels['containrdog.gitops-quiet-mode'] === 'true'
+            : undefined,
         };
 
         // Always exclude containers with label explicitly set to 'false'
@@ -59,8 +70,7 @@ export class DockerClient {
 
         // Filter by label if labeledOnly is enabled
         if (this.config.labeledOnly) {
-          const hasLabel = labelValue === 'true';
-          if (hasLabel) {
+          if (labelValue === 'true') {
             containerInfos.push(containerInfo);
           }
         } else {
@@ -76,19 +86,43 @@ export class DockerClient {
     }
   }
 
-  async pullImage(imageName: string, auth?: { username: string; password: string }): Promise<void> {
-    return new Promise((resolve, reject) => {
-      logger.info(`⬇️  Pulling image: ${imageName}`);
+  async getImageDigest(imageName: string): Promise<string | undefined> {
+    try {
+      const image = this.docker.getImage(imageName);
+      const inspect = await image.inspect();
 
-      const options: any = {};
-      if (auth) {
-        options.authconfig = {
-          username: auth.username,
-          password: auth.password,
-        };
+      if (inspect.RepoDigests && inspect.RepoDigests.length > 0) {
+        return inspect.RepoDigests[0].split('@')[1];
       }
 
-      this.docker.pull(imageName, options, (err, stream) => {
+      return inspect.Id;
+    } catch (error) {
+      logger.error(`❌ Failed to get image digest for ${imageName}:`, error);
+      return undefined;
+    }
+  }
+
+  async updateContainerImage(containerId: string, newImageName: string): Promise<void> {
+    logger.info(`   ⬇️  Pulling: ${newImageName}`);
+    await this.pullImage(newImageName);
+
+    logger.info(`   🔄 Recreating container...`);
+    await this.recreateContainer(containerId, newImageName);
+  }
+
+  async ping(): Promise<boolean> {
+    try {
+      await this.docker.ping();
+      return true;
+    } catch (error) {
+      logger.error('❌ Failed to ping Docker daemon:', error);
+      return false;
+    }
+  }
+
+  private async pullImage(imageName: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.docker.pull(imageName, {}, (err, stream) => {
         if (err) {
           logger.error(`❌ Failed to pull image ${imageName}:`, err);
           reject(err);
@@ -102,7 +136,7 @@ export class DockerClient {
 
         this.docker.modem.followProgress(
           stream,
-          (err, output) => {
+          (err, _) => {
             if (err) {
               logger.error(`❌ Error during image pull ${imageName}:`, err);
               reject(err);
@@ -121,50 +155,14 @@ export class DockerClient {
     });
   }
 
-  async getImageDigest(imageName: string): Promise<string | undefined> {
+  private async recreateContainer(containerId: string, newImageName: string): Promise<void> {
     try {
-      const image = this.docker.getImage(imageName);
-      const inspect = await image.inspect();
-
-      // Try to get the digest from RepoDigests
-      if (inspect.RepoDigests && inspect.RepoDigests.length > 0) {
-        // Extract digest from format: registry/repo@sha256:...
-        const digestPart = inspect.RepoDigests[0].split('@')[1];
-        return digestPart;
-      }
-
-      // Fallback to image ID
-      return inspect.Id;
-    } catch (error) {
-      logger.error(`❌ Failed to get image digest for ${imageName}:`, error);
-      return undefined;
-    }
-  }
-
-  async restartContainer(containerId: string): Promise<void> {
-    try {
-      logger.info(`🔄 Restarting container: ${containerId}`);
-      const container = this.docker.getContainer(containerId);
-      await container.restart();
-      logger.info(`✅ Successfully restarted container: ${containerId}`);
-    } catch (error) {
-      logger.error(`❌ Failed to restart container ${containerId}:`, error);
-      throw error;
-    }
-  }
-
-  async recreateContainer(containerId: string, newImageName: string): Promise<void> {
-    try {
-      logger.info(`🔄 Recreating container: ${containerId} with image: ${newImageName}`);
-
       const container = this.docker.getContainer(containerId);
       const inspect = await container.inspect();
 
-      // Stop and remove the old container
       await container.stop();
       await container.remove();
 
-      // Create new container with the same configuration but new image
       const createOptions: Docker.ContainerCreateOptions = {
         name: inspect.Name.replace(/^\//, ''),
         Image: newImageName,
@@ -186,101 +184,6 @@ export class DockerClient {
     } catch (error) {
       logger.error(`❌ Failed to recreate container ${containerId}:`, error);
       throw error;
-    }
-  }
-
-  async ping(): Promise<boolean> {
-    try {
-      await this.docker.ping();
-      return true;
-    } catch (error) {
-      logger.error('❌ Failed to ping Docker daemon:', error);
-      return false;
-    }
-  }
-
-  private parsePolicyFromLabel(policyLabel?: string): UpdatePolicy | undefined {
-    if (!policyLabel) return undefined;
-
-    const normalized = policyLabel.toLowerCase();
-    switch (normalized) {
-      case 'all':
-        return UpdatePolicy.ALL;
-      case 'major':
-        return UpdatePolicy.MAJOR;
-      case 'minor':
-        return UpdatePolicy.MINOR;
-      case 'patch':
-        return UpdatePolicy.PATCH;
-      case 'force':
-        return UpdatePolicy.FORCE;
-      case 'glob':
-        return UpdatePolicy.GLOB;
-      default:
-        logger.warn(`⚠️  Invalid policy label '${policyLabel}' - will use global default`);
-        return undefined;
-    }
-  }
-
-  private parseAutoUpdateLabel(autoUpdateLabel?: string): boolean | undefined {
-    if (!autoUpdateLabel) return undefined;
-    return autoUpdateLabel === 'true';
-  }
-
-  private parseUpdateCommandsLabel(commandsLabel?: string): string[] | undefined {
-    if (!commandsLabel) return undefined;
-
-    try {
-      const parsed = JSON.parse(commandsLabel);
-      if (Array.isArray(parsed)) {
-        return parsed;
-      }
-      // If single command string, wrap in array
-      return [parsed];
-    } catch (error) {
-      logger.warn(`⚠️  Invalid update-commands label format - expected JSON array`);
-      return undefined;
-    }
-  }
-
-  private parseGitOpsEnabledLabel(gitopsLabel?: string): boolean | undefined {
-    if (!gitopsLabel) return undefined;
-    return gitopsLabel === 'true';
-  }
-
-  private parseGitOpsAuthTypeLabel(authTypeLabel?: string): GitAuthType | undefined {
-    if (!authTypeLabel) return undefined;
-
-    const normalized = authTypeLabel.toLowerCase();
-    switch (normalized) {
-      case 'token':
-        return GitAuthType.TOKEN;
-      case 'ssh':
-        return GitAuthType.SSH;
-      case 'none':
-        return GitAuthType.NONE;
-      default:
-        logger.warn(`⚠️  Invalid gitops-auth-type label '${authTypeLabel}'`);
-        return undefined;
-    }
-  }
-
-  private parseIntervalLabel(intervalLabel?: string): number | undefined {
-    if (!intervalLabel) return undefined;
-
-    const match = intervalLabel.match(/^(\d+)(s|m)?$/);
-    if (!match) {
-      logger.warn(`⚠️  Invalid interval format: ${intervalLabel}`);
-      return undefined;
-    }
-
-    const value = parseInt(match[1], 10);
-    const unit = match[2] || 's';
-
-    if (unit === 's') {
-      return value * 1000;
-    } else {
-      return value * 60 * 1000;
     }
   }
 }

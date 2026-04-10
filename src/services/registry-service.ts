@@ -137,16 +137,56 @@ export class RegistryService {
         tag,
         created: response.data.config?.created,
       };
-    } catch (error: any) {
-      if (error.response?.status === 404) {
+    } catch (error) {
+      const axiosError = error as { response?: { status?: number }; message?: string };
+      if (axiosError.response?.status === 404) {
         logger.warn(`⚠️  Image not found in registry: ${imageInfo.repository}:${imageInfo.tag}`);
       } else {
         logger.error(
           `❌ Failed to get manifest for ${imageInfo.repository}:${imageInfo.tag}:`,
-          error.message
+          axiosError.message
         );
       }
       return null;
+    }
+  }
+
+  async getImageLabelValue(imageInfo: ImageInfo, labelKey: string): Promise<string | undefined> {
+    try {
+      const { registry, repository, tag } = imageInfo;
+      const token = await this.getAuthToken(registry, repository);
+
+      const registryUrl = registry === 'docker.io'
+        ? 'https://registry-1.docker.io'
+        : `https://${registry}`;
+
+      const authHeaders: Record<string, string> = {
+        Accept: 'application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json',
+      };
+      if (token) authHeaders.Authorization = `Bearer ${token}`;
+
+      const manifestResp = await this.axiosInstance.get(
+        `${registryUrl}/v2/${repository}/manifests/${tag}`,
+        { headers: authHeaders }
+      );
+
+      const configDigest: string | undefined = manifestResp.data?.config?.digest;
+      if (!configDigest) return undefined;
+
+      const blobHeaders: Record<string, string> = {};
+      if (token) blobHeaders.Authorization = `Bearer ${token}`;
+
+      const blobResp = await this.axiosInstance.get(
+        `${registryUrl}/v2/${repository}/blobs/${configDigest}`,
+        { headers: blobHeaders }
+      );
+
+      const labels: Record<string, string> | undefined =
+        blobResp.data?.config?.Labels ?? blobResp.data?.container_config?.Labels;
+
+      return labels?.[labelKey];
+    } catch {
+      return undefined;
     }
   }
 

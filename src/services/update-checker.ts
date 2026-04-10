@@ -3,16 +3,16 @@ import { ContainerInfo, ImageInfo, ImageUpdateInfo, UpdateType, UpdatePolicy } f
 import { logger } from '../utils/logger';
 import { ImageParser } from '../utils/image-parser';
 import { RegistryService } from './registry-service';
-import { DockerClient } from './docker-client';
+import { IRuntimeClient } from './runtime-client';
 import { getConfig } from '../utils/config';
 
 export class UpdateChecker {
   private registryService: RegistryService;
-  private dockerClient: DockerClient;
+  private runtimeClient: IRuntimeClient;
 
-  constructor(registryService: RegistryService, dockerClient: DockerClient) {
+  constructor(registryService: RegistryService, runtimeClient: IRuntimeClient) {
     this.registryService = registryService;
-    this.dockerClient = dockerClient;
+    this.runtimeClient = runtimeClient;
   }
 
   async checkForUpdates(containers: ContainerInfo[]): Promise<ImageUpdateInfo[]> {
@@ -38,7 +38,6 @@ export class UpdateChecker {
 
     // Use container-specific policy or fall back to global policy
     const policy = container.policy || config.policy;
-    const matchTag = container.matchTag !== undefined ? container.matchTag : config.matchTag;
     const globPattern = container.globPattern || config.globPattern;
 
     logger.debug(
@@ -121,6 +120,7 @@ export class UpdateChecker {
           currentImage,
           availableImage,
           updateType: UpdateType.SEMANTIC_VERSION,
+          ...await this.fetchLabelValues(container, currentImage, availableImage),
         };
       }
 
@@ -187,6 +187,23 @@ export class UpdateChecker {
     return null;
   }
 
+  private async fetchLabelValues(
+    container: ContainerInfo,
+    currentImage: ImageInfo,
+    availableImage: ImageInfo
+  ): Promise<{ imageLabelKey?: string; currentLabelValue?: string; availableLabelValue?: string }> {
+    const config = getConfig();
+    const labelKey = container.imageLabelKey || config.imageLabelKey;
+    if (!labelKey) return {};
+
+    const [currentLabelValue, availableLabelValue] = await Promise.all([
+      this.registryService.getImageLabelValue(currentImage, labelKey),
+      this.registryService.getImageLabelValue(availableImage, labelKey),
+    ]);
+
+    return { imageLabelKey: labelKey, currentLabelValue, availableLabelValue };
+  }
+
   private matchesGlob(tag: string, pattern: string): boolean {
     // Convert glob pattern to regex
     // Simple implementation: * matches any characters, ? matches single character
@@ -201,13 +218,11 @@ export class UpdateChecker {
     currentImage: ImageInfo
   ): Promise<ImageUpdateInfo | null> {
     try {
-      const config = getConfig();
-
       // For force policy with matchTag, only check the current tag
       // Otherwise, we'd need to check all tags (not implemented here for simplicity)
 
       // Get current local image digest
-      const localDigest = await this.dockerClient.getImageDigest(container.image);
+      const localDigest = await this.runtimeClient.getImageDigest(container.image);
 
       // Get remote image manifest for the current tag
       const remoteManifest = await this.registryService.getImageManifest(currentImage);
@@ -233,6 +248,7 @@ export class UpdateChecker {
           currentImage,
           availableImage,
           updateType: UpdateType.DIGEST_CHANGE,
+          ...await this.fetchLabelValues(container, currentImage, availableImage),
         };
       }
 

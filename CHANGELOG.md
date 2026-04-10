@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.3.0](https://github.com/vaggeliskls/ContainrDog/compare/0.2.0...0.3.0) (2026-04-10)
+
+
+### Features
+
+* add examples ([c5fe031](https://github.com/vaggeliskls/ContainrDog/commit/c5fe0313767cc3750c284c5beb0e0d8919f2c289))
+* add label feature on update ([58be386](https://github.com/vaggeliskls/ContainrDog/commit/58be386ee2aa5ab4a3dd759ee8a1e23bdd00cf2c))
+* code quality test ([72aef86](https://github.com/vaggeliskls/ContainrDog/commit/72aef866df89314bbb6a51309fd5072bed010610))
+* exlude tests until fixed ([eee23a7](https://github.com/vaggeliskls/ContainrDog/commit/eee23a79957a0b3b1535ddc02c537a7df55004e1))
+* first tests ([3baf5c8](https://github.com/vaggeliskls/ContainrDog/commit/3baf5c858413d631d436e4dfb862af559fa8c6cb))
+* gitops notification ([78b9ff9](https://github.com/vaggeliskls/ContainrDog/commit/78b9ff9230b309e947ca1078cdf9ca1a096ef73c))
+* helm chart ([ad51507](https://github.com/vaggeliskls/ContainrDog/commit/ad5150712996d130b87f9e2a3d6affd77b6f7629))
+* helm publish and actions version update ([05837d4](https://github.com/vaggeliskls/ContainrDog/commit/05837d430521bce26a86c0a945da80103f73fdcf))
+* kubernetes and docs seperate ([2ec9c41](https://github.com/vaggeliskls/ContainrDog/commit/2ec9c41f1f3ccab86e4303e750f284c3ed3656fd))
+* update helm at the same time ([c6f2205](https://github.com/vaggeliskls/ContainrDog/commit/c6f22058cbd6cfbfe6705dea453bd0939bbb5ed9))
+* update helm at the same time ([c095684](https://github.com/vaggeliskls/ContainrDog/commit/c095684e09282b5144a0482f018505f007c19c8f))
+* update versions ([62b6656](https://github.com/vaggeliskls/ContainrDog/commit/62b6656b39cb52f4ed25b974fa8f9d22bf30688e))
+
+
+### Bug Fixes
+
+* add kubeconfig ([3f59b1b](https://github.com/vaggeliskls/ContainrDog/commit/3f59b1b5acb17bdc9b351db585d518083bcffdaf))
+* kube config path ([00c144d](https://github.com/vaggeliskls/ContainrDog/commit/00c144d6733169efd454181fed565ed2f751a28c))
+* lintings issues ([470041d](https://github.com/vaggeliskls/ContainrDog/commit/470041de127ada1e7698cfdce1be36975a1f87fb))
+
 ## [0.2.0](https://github.com/vaggeliskls/ContainrDog/compare/0.1.1...0.2.0) (2025-11-07)
 
 

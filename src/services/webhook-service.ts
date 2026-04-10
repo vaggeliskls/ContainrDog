@@ -71,6 +71,10 @@ export class WebhookService {
     }
   }
 
+  private labelDisplayName(key: string): string {
+    return key.split('.').pop() || key;
+  }
+
   private buildPayload(update: ImageUpdateInfo, success: boolean, error?: string): Record<string, unknown> {
     const status = success ? 'Success' : 'Failed';
     const emoji = success ? '✅' : '❌';
@@ -116,6 +120,12 @@ export class WebhookService {
         short: true,
       },
     ];
+
+    if (update.imageLabelKey) {
+      const labelName = this.labelDisplayName(update.imageLabelKey);
+      if (update.currentLabelValue) fields.push({ title: `Current ${labelName}`, value: update.currentLabelValue, short: true });
+      if (update.availableLabelValue) fields.push({ title: `New ${labelName}`, value: update.availableLabelValue, short: true });
+    }
 
     if (error) {
       fields.push({
@@ -168,6 +178,12 @@ export class WebhookService {
       },
     ];
 
+    if (update.imageLabelKey) {
+      const labelName = this.labelDisplayName(update.imageLabelKey);
+      if (update.currentLabelValue) fields.push({ name: `Current ${labelName}`, value: update.currentLabelValue, inline: true });
+      if (update.availableLabelValue) fields.push({ name: `New ${labelName}`, value: update.availableLabelValue, inline: true });
+    }
+
     if (error) {
       fields.push({
         name: 'Error',
@@ -217,6 +233,12 @@ export class WebhookService {
       },
     ];
 
+    if (update.imageLabelKey) {
+      const labelName = this.labelDisplayName(update.imageLabelKey);
+      if (update.currentLabelValue) facts.push({ name: `Current ${labelName}`, value: update.currentLabelValue });
+      if (update.availableLabelValue) facts.push({ name: `New ${labelName}`, value: update.availableLabelValue });
+    }
+
     if (error) {
       facts.push({
         name: 'Error',
@@ -259,6 +281,13 @@ export class WebhookService {
         currentTag: update.currentImage.tag,
         newTag: update.availableImage.tag,
         updateType: update.updateType,
+        ...(update.imageLabelKey && {
+          label: {
+            key: update.imageLabelKey,
+            currentValue: update.currentLabelValue ?? null,
+            newValue: update.availableLabelValue ?? null,
+          },
+        }),
       },
       error: error || null,
     };

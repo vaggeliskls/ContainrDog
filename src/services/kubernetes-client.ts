@@ -125,6 +125,7 @@ export class KubernetesClient implements IRuntimeClient {
             matchTag: allLabels['containrdog.match-tag'] === 'true',
             globPattern: allLabels['containrdog.glob-pattern'],
             autoUpdate: parseAutoUpdateLabel(allLabels['containrdog.auto-update']),
+            imageLabelKey: allLabels['containrdog.image-label'] || undefined,
             updateCommands: parseJSONLabel(allLabels['containrdog.update-commands']),
             preUpdateCommands: parseJSONLabel(allLabels['containrdog.pre-update-commands']),
             postUpdateCommands: parseJSONLabel(allLabels['containrdog.post-update-commands']),

@@ -55,6 +55,9 @@ export class ConfigManager {
     // Auto-update (default: true)
     const autoUpdate = process.env.AUTO_UPDATE !== 'false';
 
+    // Image label to display in notifications (optional)
+    const imageLabelKey = process.env.IMAGE_LABEL || undefined;
+
     // Webhook configuration
     const webhook = this.parseWebhookConfig();
 
@@ -85,6 +88,7 @@ export class ConfigManager {
       matchTag,
       globPattern,
       autoUpdate,
+      imageLabelKey,
       webhook,
       gitops,
       ecr,

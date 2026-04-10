@@ -62,6 +62,10 @@ spec:
             - name: MATCH_TAG
               value: "true"
             {{- end }}
+            {{- if .Values.config.imageLabel }}
+            - name: IMAGE_LABEL
+              value: {{ .Values.config.imageLabel | quote }}
+            {{- end }}
 
             # Hooks
             {{- if .Values.hooks.preUpdateCommands }}
@@ -85,6 +89,8 @@ spec:
               value: {{ .Values.webhook.notifyOnFailure | quote }}
             - name: WEBHOOK_NOTIFY_CHECK
               value: {{ .Values.webhook.notifyOnCheck | quote }}
+            - name: WEBHOOK_NOTIFY_GITOPS
+              value: {{ .Values.webhook.notifyOnGitops | quote }}
             {{- if .Values.webhook.url }}
             - name: WEBHOOK_URL
               valueFrom:

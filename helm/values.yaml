@@ -24,6 +24,11 @@ config:
   autoUpdate: true
   labeled: true           # only monitor annotated workloads
   label: "containrdog-enabled"
+  # Image label to display in update notifications (optional).
+  # Fetched from the registry for both current and new image.
+  # Silently omitted if the label is not present on the image.
+  # e.g. "org.opencontainers.image.revision"
+  imageLabel: ""
 
 # ── Kubernetes namespaces ─────────────────────────────────────────────────────
 kubernetes:
@@ -46,6 +51,7 @@ webhook:
   notifyOnSuccess: true
   notifyOnFailure: true
   notifyOnCheck: false
+  notifyOnGitops: true    # notify when GitOps commands execute (default: true)
 
 # ── GitOps ────────────────────────────────────────────────────────────────────
 gitops:

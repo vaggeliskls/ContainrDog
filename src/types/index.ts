@@ -64,6 +64,7 @@ export interface Config {
   matchTag: boolean; // For force policy: only update if same tag
   globPattern?: string; // For glob policy
   autoUpdate: boolean; // Global auto-update setting
+  imageLabelKey?: string; // Image label to display in notifications (e.g. org.opencontainers.image.revision)
   webhook?: WebhookConfig; // Webhook notifications
   gitops?: GitOpsConfig; // GitOps configuration
   ecr?: ECRConfig; // AWS ECR configuration
@@ -102,6 +103,7 @@ export interface ContainerInfo {
   matchTag?: boolean;
   globPattern?: string;
   autoUpdate?: boolean;
+  imageLabelKey?: string;
   updateCommands?: string[]; // Deprecated: use preUpdateCommands and postUpdateCommands
   preUpdateCommands?: string[]; // Commands to run before update
   postUpdateCommands?: string[]; // Commands to run after update
@@ -135,6 +137,9 @@ export interface ImageUpdateInfo {
   currentImage: ImageInfo;
   availableImage: ImageInfo;
   updateType: UpdateType;
+  imageLabelKey?: string;
+  currentLabelValue?: string;
+  availableLabelValue?: string;
 }
 
 export enum UpdateType {

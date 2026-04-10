@@ -120,6 +120,7 @@ export class UpdateChecker {
           currentImage,
           availableImage,
           updateType: UpdateType.SEMANTIC_VERSION,
+          ...await this.fetchLabelValues(container, currentImage, availableImage),
         };
       }
 
@@ -186,6 +187,23 @@ export class UpdateChecker {
     return null;
   }
 
+  private async fetchLabelValues(
+    container: ContainerInfo,
+    currentImage: ImageInfo,
+    availableImage: ImageInfo
+  ): Promise<{ imageLabelKey?: string; currentLabelValue?: string; availableLabelValue?: string }> {
+    const config = getConfig();
+    const labelKey = container.imageLabelKey || config.imageLabelKey;
+    if (!labelKey) return {};
+
+    const [currentLabelValue, availableLabelValue] = await Promise.all([
+      this.registryService.getImageLabelValue(currentImage, labelKey),
+      this.registryService.getImageLabelValue(availableImage, labelKey),
+    ]);
+
+    return { imageLabelKey: labelKey, currentLabelValue, availableLabelValue };
+  }
+
   private matchesGlob(tag: string, pattern: string): boolean {
     // Convert glob pattern to regex
     // Simple implementation: * matches any characters, ? matches single character
@@ -230,6 +248,7 @@ export class UpdateChecker {
           currentImage,
           availableImage,
           updateType: UpdateType.DIGEST_CHANGE,
+          ...await this.fetchLabelValues(container, currentImage, availableImage),
         };
       }
 

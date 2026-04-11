@@ -126,7 +126,7 @@ spec:
             - name: GITOPS_CLONE_PATH
               value: {{ .Values.gitops.clonePath | quote }}
             {{- end }}
-            {{- if .Values.gitops.sshKeyPath }}
+            {{- if or .Values.gitops.sshKeySecret .Values.gitops.sshKeyPath }}
             - name: GITOPS_SSH_KEY_PATH
               value: {{ .Values.gitops.sshKeyPath | quote }}
             {{- end }}
@@ -191,18 +191,33 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
 
-          {{- if .Values.registry.existingPullSecret }}
+          {{- if or .Values.registry.existingPullSecret .Values.gitops.sshKeySecret }}
           volumeMounts:
+            {{- if .Values.registry.existingPullSecret }}
             - name: docker-config
               mountPath: /docker-config
               readOnly: true
+            {{- end }}
+            {{- if .Values.gitops.sshKeySecret }}
+            - name: gitops-ssh-key
+              mountPath: /keys
+              readOnly: true
+            {{- end }}
           {{- end }}
 
-      {{- if .Values.registry.existingPullSecret }}
+      {{- if or .Values.registry.existingPullSecret .Values.gitops.sshKeySecret }}
       volumes:
+        {{- if .Values.registry.existingPullSecret }}
         - name: docker-config
           secret:
             secretName: {{ .Values.registry.existingPullSecret }}
+        {{- end }}
+        {{- if .Values.gitops.sshKeySecret }}
+        - name: gitops-ssh-key
+          secret:
+            secretName: {{ .Values.gitops.sshKeySecret }}
+            defaultMode: 0400
+        {{- end }}
       {{- end }}
 
       {{- with .Values.nodeSelector }}

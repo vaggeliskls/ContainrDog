@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/vaggeliskls/containrdog
-  tag: ""  # defaults to Chart.appVersion
+  tag: "" # defaults to Chart.appVersion
   pullPolicy: IfNotPresent
 
 # Number of replicas (keep at 1 — multiple replicas would duplicate updates)
@@ -18,11 +18,11 @@ rbac:
 config:
   interval: "5m"
   logLevel: "info"
-  policy: "major"         # all | major | minor | patch | force | glob
-  globPattern: ""         # used with policy=glob
-  matchTag: false         # used with policy=force
+  policy: "major" # all | major | minor | patch | force | glob
+  globPattern: "" # used with policy=glob
+  matchTag: false # used with policy=force
   autoUpdate: true
-  labeled: true           # only monitor annotated workloads
+  labeled: true # only monitor annotated workloads
   label: "containrdog-enabled"
   # Image label to display in update notifications (optional).
   # Fetched from the registry for both current and new image.
@@ -36,35 +36,36 @@ kubernetes:
   # Leave empty and set allNamespaces: true to monitor everything.
   namespaces:
     - default
-  allNamespaces: false  # set true to ignore namespaces list and scan all
+  allNamespaces: false # set true to ignore namespaces list and scan all
 
 # ── Hooks ─────────────────────────────────────────────────────────────────────
 hooks:
-  preUpdateCommands: []   # e.g. ["echo Starting update for $CONTAINER_NAME"]
-  postUpdateCommands: []  # e.g. ["kubectl rollout status deployment/$CONTAINER_NAME"]
+  preUpdateCommands: [] # e.g. ["echo Starting update for $CONTAINER_NAME"]
+  postUpdateCommands: [] # e.g. ["kubectl rollout status deployment/$CONTAINER_NAME"]
 
 # ── Webhooks ──────────────────────────────────────────────────────────────────
 webhook:
   enabled: false
-  url: ""                 # set via --set or existingSecret
-  provider: "generic"     # slack | discord | teams | generic
+  url: "" # set via --set or existingSecret
+  provider: "generic" # slack | discord | teams | generic
   notifyOnSuccess: true
   notifyOnFailure: true
   notifyOnCheck: false
-  notifyOnGitops: true    # notify when GitOps commands execute (default: true)
+  notifyOnGitops: true # notify when GitOps commands execute (default: true)
 
 # ── GitOps ────────────────────────────────────────────────────────────────────
 gitops:
   enabled: false
-  repoUrl: ""
+  repoUrl: "" # e.g. "https://github.com/myorg/myrepo.git" or "git@github.com:myorg/myrepo.git"
   branch: "main"
-  authType: "none"        # token | ssh | none
-  token: ""               # set via --set or existingSecret
-  sshKeyPath: ""
+  authType: "none" # token | ssh | none
+  token: "" # set via --set gitops.token=xxx or via existingSecret (key: GITOPS_TOKEN)
+  sshKeySecret: "" # name of a Secret containing the SSH private key (key: deploy_key)
+  sshKeyPath: "/keys/deploy_key" # mount path inside the container
   pollInterval: "60s"
-  watchPaths: []          # e.g. ["docker-compose.yml", "config/**"]
-  commands: []            # e.g. ["kubectl apply -f $GITOPS_CLONE_PATH/k8s/"]
-  clonePath: ""
+  watchPaths: [] # e.g. ["docker-compose.yml", "config/**"]
+  commands: [] # e.g. ["kubectl apply -f $GITOPS_CLONE_PATH/k8s/"]
+  clonePath: "" # local clone directory; defaults to /tmp/<repo-name>.
   quietMode: false
 
 # ── Registry credentials ──────────────────────────────────────────────────────
@@ -88,10 +89,10 @@ registry:
 ecr:
   enabled: false
   region: ""
-  accessKeyId: ""         # leave empty to use IAM role
+  accessKeyId: "" # leave empty to use IAM role
   secretAccessKey: ""
-  registries: []          # e.g. ["123456789.dkr.ecr.us-east-1.amazonaws.com"]
-  accountId: ""           # auto-builds registry URL if registries is empty
+  registries: [] # e.g. ["123456789.dkr.ecr.us-east-1.amazonaws.com"]
+  accountId: "" # auto-builds registry URL if registries is empty
   authRefreshInterval: "6h"
 
 # ── Sensitive values via existing Secret ─────────────────────────────────────

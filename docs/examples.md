@@ -190,7 +190,7 @@ kubernetes:
 ```
 
 ```bash
-helm install containrdog ./helm -f values.yaml -n containrdog --create-namespace
+helm install containrdog oci://ghcr.io/vaggeliskls/charts/containrdog -f values.yaml -n containrdog --create-namespace
 ```
 
 Annotate workloads to opt in:

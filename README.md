@@ -7,6 +7,8 @@
 
   Periodically checks for new image versions and executes custom commands when updates are detected.
 
+  📖 **[Documentation](https://vaggeliskls.github.io/ContainrDog)**
+
   ---
 </div>
 
@@ -45,7 +47,7 @@ labels:
 
 **Kubernetes (Helm)**
 ```bash
-helm install containrdog ./helm \
+helm install containrdog oci://ghcr.io/vaggeliskls/charts/containrdog \
   --namespace containrdog \
   --create-namespace \
   --set kubernetes.namespaces="{default}"
@@ -64,9 +66,7 @@ spec:
 
 | Topic | Description |
 |-------|-------------|
-| [Examples](docs/examples.md) | Full working examples for Docker and Kubernetes |
-| [Runtimes](docs/runtimes.md) | Docker, Podman, and Kubernetes setup |
-| [Helm Chart](docs/helm.md) | Deploy on Kubernetes with Helm |
+| [Deployment](docs/deployments.md) | Docker, Podman, and Kubernetes setup |
 | [Configuration](docs/configuration.md) | All environment variables |
 | [Update Policies](docs/update-policies.md) | `major`, `minor`, `patch`, `force`, `glob` |
 | [Labels & Annotations](docs/labels.md) | Per-container control |
@@ -74,6 +74,7 @@ spec:
 | [Webhooks](docs/webhooks.md) | Slack, Discord, Teams notifications |
 | [GitOps](docs/gitops.md) | Git-based config management |
 | [Registries](docs/registries.md) | Private registry authentication & ECR |
+| [Examples](docs/examples.md) | Full working examples for Docker and Kubernetes |
 | [Development](docs/development.md) | Local dev and project structure |
 
 ## License

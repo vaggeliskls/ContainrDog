@@ -1,25 +1,105 @@
-# Helm Chart
+# Deployment
 
-Deploy ContainrDog on Kubernetes using the included Helm chart in [`helm/`](../helm/).
+- [Docker / Podman](#docker--podman)
+- [Kubernetes](#kubernetes)
 
-## Quick Install
+---
+
+## Docker / Podman
+
+ContainrDog monitors containers via the Docker socket. This works with both Docker and Podman.
+
+### Docker
+
+Mount the Docker socket and run:
 
 ```bash
-# From the repo
-helm install containrdog ./helm \
+docker run -d \
+  --name containrdog \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -e INTERVAL=5m \
+  ghcr.io/vaggeliskls/containrdog
+```
+
+**docker-compose.yml** (recommended):
+
+```yaml
+services:
+  containrdog:
+    image: ghcr.io/vaggeliskls/containrdog:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - INTERVAL=5m
+      - LABELED=true
+    restart: unless-stopped
+
+  myapp:
+    image: nginx:1.25
+    labels:
+      - containrdog-enabled=true
+```
+
+### Podman
+
+Enable and mount the Podman socket:
+
+```bash
+systemctl --user enable --now podman.socket
+
+docker run -d \
+  --name containrdog \
+  -v /run/user/1000/podman/podman.sock:/var/run/docker.sock:ro \
+  -e INTERVAL=5m \
+  ghcr.io/vaggeliskls/containrdog
+```
+
+Set a custom socket path if needed:
+```bash
+-e SOCKET_PATH=/run/podman/podman.sock
+```
+
+### Labeling containers
+
+Add the `containrdog-enabled=true` label to containers you want monitored:
+
+```yaml
+services:
+  myapp:
+    image: nginx:1.25
+    labels:
+      - containrdog-enabled=true
+      - containrdog.policy=minor
+```
+
+See [Labels & Annotations](labels.md) for all available options.
+
+---
+
+## Kubernetes
+
+Deploy ContainrDog on Kubernetes using the Helm chart published to the OCI registry.
+
+### Quick Install
+
+```bash
+helm install containrdog oci://ghcr.io/vaggeliskls/charts/containrdog \
   --namespace containrdog \
   --create-namespace
+```
 
-# Override namespaces to monitor
-helm install containrdog ./helm \
+Override namespaces to monitor:
+
+```bash
+helm install containrdog oci://ghcr.io/vaggeliskls/charts/containrdog \
   --namespace containrdog \
   --create-namespace \
   --set kubernetes.namespaces="{default,production}"
 ```
 
-## Values
+### Values
 
-### Minimal production example
+#### Minimal production example
 
 ```yaml
 # values-prod.yaml
@@ -50,18 +130,20 @@ resources:
 ```
 
 ```bash
-helm install containrdog ./helm -f values-prod.yaml -n containrdog --create-namespace
+helm install containrdog oci://ghcr.io/vaggeliskls/charts/containrdog \
+  -f values-prod.yaml \
+  -n containrdog --create-namespace
 ```
 
-### Monitor all namespaces
+#### Monitor all namespaces
 
 ```bash
-helm install containrdog ./helm \
+helm install containrdog oci://ghcr.io/vaggeliskls/charts/containrdog \
   --set kubernetes.allNamespaces=true \
   -n containrdog --create-namespace
 ```
 
-### Private registry credentials
+#### Private registry credentials
 
 The recommended approach is to reuse the same `kubernetes.io/dockerconfigjson` Secret you already use for `imagePullSecrets` — no duplication needed:
 
@@ -74,7 +156,7 @@ kubectl create secret docker-registry my-pull-secret \
   -n containrdog
 
 # Reference it in the chart
-helm install containrdog ./helm \
+helm install containrdog oci://ghcr.io/vaggeliskls/charts/containrdog \
   --set registry.existingPullSecret=my-pull-secret \
   -n containrdog --create-namespace
 ```
@@ -83,12 +165,12 @@ ContainrDog mounts the secret as a volume and reads it as a Docker config file. 
 
 **Fallback** — raw JSON string (not recommended for production):
 ```bash
-helm install containrdog ./helm \
+helm install containrdog oci://ghcr.io/vaggeliskls/charts/containrdog \
   --set 'registry.credentials=[{"registry":"ghcr.io","username":"user","password":"ghp_token"}]' \
   -n containrdog --create-namespace
 ```
 
-### AWS ECR
+#### AWS ECR
 
 ```yaml
 ecr:
@@ -108,15 +190,16 @@ ecr:
   accountId: "123456789"
 ```
 
-### GitOps
+#### GitOps
 
 ```yaml
 gitops:
   enabled: true
   repoUrl: "https://github.com/user/config-repo.git"
   branch: main
-  authType: token
-  token: "ghp_xxxxx"
+  authType: token       # token | ssh | none
+  token: "ghp_xxxxx"   # for token auth
+  # sshKeySecret: containrdog-deploy-key  # for SSH/deploy key auth (Secret name)
   watchPaths:
     - "k8s/**"
     - "config/*.yaml"
@@ -124,7 +207,7 @@ gitops:
     - "kubectl apply -f $GITOPS_CLONE_PATH/k8s/"
 ```
 
-### Webhooks
+#### Webhooks
 
 ```yaml
 webhook:
@@ -133,7 +216,7 @@ webhook:
   url: "https://hooks.slack.com/..."
 ```
 
-### Hooks (pre/post update commands)
+#### Hooks (pre/post update commands)
 
 ```yaml
 hooks:
@@ -143,7 +226,7 @@ hooks:
     - "kubectl rollout status deployment/$CONTAINER_NAME -n $CONTAINER_ID"
 ```
 
-## Annotating Workloads
+### Annotating Workloads
 
 After installing, annotate the workloads you want to monitor:
 
@@ -164,7 +247,7 @@ spec:
 
 See [Labels & Annotations](labels.md) for all available annotations.
 
-## RBAC
+### RBAC
 
 The chart creates a `ClusterRole` and `ClusterRoleBinding` by default. Required permissions:
 
@@ -177,20 +260,21 @@ The chart creates a `ClusterRole` and `ClusterRoleBinding` by default. Required 
 Disable RBAC creation if you manage it separately:
 
 ```bash
-helm install containrdog ./helm \
+helm install containrdog oci://ghcr.io/vaggeliskls/charts/containrdog \
   --set rbac.create=false \
   --set serviceAccount.name=my-existing-sa
 ```
 
-## Upgrade & Uninstall
+### Upgrade & Uninstall
 
 ```bash
-helm upgrade containrdog ./helm -n containrdog -f values-prod.yaml
+helm upgrade containrdog oci://ghcr.io/vaggeliskls/charts/containrdog \
+  -n containrdog -f values-prod.yaml
 
 helm uninstall containrdog -n containrdog
 ```
 
-## View Logs
+### View Logs
 
 ```bash
 kubectl logs -f deployment/containrdog -n containrdog

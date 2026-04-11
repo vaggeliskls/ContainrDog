@@ -151,7 +151,6 @@ export class KubernetesClient implements IRuntimeClient {
       logger.error('❌ Failed to list Kubernetes pods:', error);
     }
 
-    logger.debug(`☸️  Found ${containers.length} containers to monitor`);
     return containers;
   }
 

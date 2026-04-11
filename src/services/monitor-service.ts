@@ -24,6 +24,7 @@ export class MonitorService {
   private gitopsExecuting: Set<string> = new Set(); // Track executing GitOps operations
   private globalGitopsExecuting: boolean = false; // Track global GitOps execution
   private updateCheckExecuting: boolean = false; // Track if update check is running
+  private lastMonitoredContainerIds: string = ''; // Track last seen container set for change detection
 
   constructor(runtimeClient: IRuntimeClient) {
     this.runtimeClient = runtimeClient;
@@ -89,7 +90,17 @@ export class MonitorService {
         const containers = await this.runtimeClient.getRunningContainers();
 
         if (containers.length === 0) {
+          logger.info('🔍 No containers found to monitor');
           return;
+        }
+
+        const containerIds = containers.map((c) => c.id).sort().join(',');
+        if (containerIds !== this.lastMonitoredContainerIds) {
+          this.lastMonitoredContainerIds = containerIds;
+          logger.info(`🔍 Monitoring ${containers.length} container(s):`);
+          for (const container of containers) {
+            logger.info(`   📦 ${container.name} (${container.image})`);
+          }
         }
 
         const updates = await this.updateChecker.checkForUpdates(containers);

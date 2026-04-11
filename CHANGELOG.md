@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/vaggeliskls/ContainrDog/compare/0.4.0...0.4.1) (2026-04-11)
+
+
+### Bug Fixes
+
+* root level annotations and labels ([c831207](https://github.com/vaggeliskls/ContainrDog/commit/c83120714fa353aba12ea548561370b2ee2439e4))
+
 ## [0.4.0](https://github.com/vaggeliskls/ContainrDog/compare/0.3.1...0.4.0) (2026-04-11)
 
 

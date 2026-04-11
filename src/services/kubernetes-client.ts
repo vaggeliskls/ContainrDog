@@ -76,19 +76,24 @@ export class KubernetesClient implements IRuntimeClient {
         if (pod.status?.phase !== 'Running') continue;
 
         const namespace = pod.metadata?.namespace || 'default';
-        // Merge pod labels and annotations; annotations take precedence for containrdog settings
+
+        // Find the owning workload (Deployment, StatefulSet, DaemonSet) for update operations
+        const workload = await this.findOwningWorkload(pod, namespace);
+
+        // Merge in priority order (lowest -> highest): pod labels, pod annotations, workload annotations
+        // Workload (Deployment/StatefulSet/DaemonSet) root-level annotations take the highest precedence,
+        // allowing containrdog to be configured at the workload level without touching pod templates.
         const podLabels = pod.metadata?.labels || {};
-        const annotations = pod.metadata?.annotations || {};
-        const allLabels = { ...podLabels, ...annotations };
+        const podAnnotations = pod.metadata?.annotations || {};
+        const workloadAnnotations = workload?.annotations || {};
+        const allLabels = { ...podLabels, ...podAnnotations, ...workloadAnnotations };
 
         // Respect enabled/disabled label
         const labelValue = allLabels[config.label];
         if (labelValue === 'false') continue;
         if (config.labeledOnly && labelValue !== 'true') continue;
 
-        // Find the owning workload (Deployment, StatefulSet, DaemonSet) for update operations
-        const workload = await this.findOwningWorkload(pod, namespace);
-
+        // Only monitor regular containers — init containers are excluded
         for (const containerSpec of pod.spec?.containers || []) {
           const image = containerSpec.image || '';
 
@@ -221,25 +226,47 @@ export class KubernetesClient implements IRuntimeClient {
   /**
    * Walk ownerReferences to find the top-level workload that owns a pod.
    * Pod -> ReplicaSet -> Deployment, or Pod -> StatefulSet/DaemonSet directly.
+   * Also returns the workload's own annotations so they can be merged with pod annotations.
    */
   private async findOwningWorkload(
     pod: k8s.V1Pod,
     namespace: string
-  ): Promise<{ kind: string; name: string } | null> {
+  ): Promise<{ kind: string; name: string; annotations: Record<string, string> } | null> {
     for (const ownerRef of pod.metadata?.ownerReferences || []) {
       if (ownerRef.kind === 'ReplicaSet') {
         try {
           const rs = await this.appsV1Api.readNamespacedReplicaSet({ name: ownerRef.name, namespace });
           for (const rsOwner of rs.metadata?.ownerReferences || []) {
             if (rsOwner.kind === 'Deployment') {
-              return { kind: 'Deployment', name: rsOwner.name };
+              try {
+                const deployment = await this.appsV1Api.readNamespacedDeployment({ name: rsOwner.name, namespace });
+                return {
+                  kind: 'Deployment',
+                  name: rsOwner.name,
+                  annotations: deployment.metadata?.annotations || {},
+                };
+              } catch {
+                return { kind: 'Deployment', name: rsOwner.name, annotations: {} };
+              }
             }
           }
         } catch {
           // ReplicaSet not accessible; fall through
         }
-      } else if (ownerRef.kind === 'StatefulSet' || ownerRef.kind === 'DaemonSet') {
-        return { kind: ownerRef.kind, name: ownerRef.name };
+      } else if (ownerRef.kind === 'StatefulSet') {
+        try {
+          const ss = await this.appsV1Api.readNamespacedStatefulSet({ name: ownerRef.name, namespace });
+          return { kind: 'StatefulSet', name: ownerRef.name, annotations: ss.metadata?.annotations || {} };
+        } catch {
+          return { kind: 'StatefulSet', name: ownerRef.name, annotations: {} };
+        }
+      } else if (ownerRef.kind === 'DaemonSet') {
+        try {
+          const ds = await this.appsV1Api.readNamespacedDaemonSet({ name: ownerRef.name, namespace });
+          return { kind: 'DaemonSet', name: ownerRef.name, annotations: ds.metadata?.annotations || {} };
+        } catch {
+          return { kind: 'DaemonSet', name: ownerRef.name, annotations: {} };
+        }
       }
     }
     return null;

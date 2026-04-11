@@ -158,7 +158,6 @@ export class UpdateChecker {
 
         case UpdatePolicy.MAJOR:
           // Accept major, minor, and patch updates
-          // No restrictions
           return tag;
 
         case UpdatePolicy.MINOR:

@@ -234,9 +234,25 @@ After installing, annotate the workloads you want to monitor:
 kubectl annotate deployment myapp containrdog-enabled=true -n default
 ```
 
-Or in the workload manifest:
+Or in the workload manifest. Annotations can be set at either the **Deployment `metadata`** (root level, recommended) or the **pod template** — workload-level takes precedence if both are set:
 
 ```yaml
+# Recommended: workload root metadata
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+  annotations:
+    containrdog-enabled: "true"
+    containrdog.policy: "minor"
+```
+
+```yaml
+# Also works: pod template annotations
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
 spec:
   template:
     metadata:

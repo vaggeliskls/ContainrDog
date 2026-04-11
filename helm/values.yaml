@@ -126,3 +126,10 @@ extraEnv: []
 #     secretKeyRef:
 #       name: my-secret
 #       key: my-key
+#
+# Example: set webhook URL from an existing secret (alternative to existingSecret)
+# - name: WEBHOOK_URL
+#   valueFrom:
+#     secretKeyRef:
+#       name: my-slack-secret
+#       key: slack-webhook-url

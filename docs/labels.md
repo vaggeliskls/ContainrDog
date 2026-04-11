@@ -2,7 +2,11 @@
 
 Per-container labels and annotations override the global defaults set via environment variables (see [Configuration](configuration.md)). Only set a label if you want to override the global behaviour for that specific container — if a label is not set, the global value applies.
 
-Docker uses labels; Kubernetes uses pod template annotations.
+Docker uses labels; Kubernetes reads annotations from three sources, merged in priority order (highest wins):
+
+1. **Workload `metadata.annotations`** (Deployment/StatefulSet/DaemonSet root level) — highest priority
+2. **Pod template `spec.template.metadata.annotations`**
+3. **Pod template `spec.template.metadata.labels`** — lowest priority
 
 ## Enabling Monitoring
 
@@ -10,7 +14,10 @@ Docker uses labels; Kubernetes uses pod template annotations.
 # Docker (label)
 containrdog-enabled: "true"
 
-# Kubernetes (annotation on Deployment pod template)
+# Kubernetes — workload root level (recommended)
+containrdog-enabled: "true"
+
+# Kubernetes — pod template level (also works, overridden by workload-level if both set)
 containrdog-enabled: "true"
 ```
 
@@ -58,12 +65,13 @@ services:
 ## Kubernetes Example
 
 ```yaml
-spec:
-  template:
-    metadata:
-      annotations:
-        containrdog-enabled: "true"
-        containrdog.policy: "minor"
-        containrdog.auto-update: "true"
-        containrdog.post-update-commands: '["kubectl rollout status deployment/myapp"]'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+  annotations:
+    containrdog-enabled: "true"
+    containrdog.policy: "minor"
+    containrdog.auto-update: "true"
+    containrdog.post-update-commands: '["kubectl rollout status deployment/myapp"]'
 ```

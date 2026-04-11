@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/vaggeliskls/ContainrDog/compare/0.4.1...0.4.2) (2026-04-11)
+
+
+### Bug Fixes
+
+* normalize docker.io domain and password ([bc75df3](https://github.com/vaggeliskls/ContainrDog/commit/bc75df377dd06ee55ccbdb92b0530edb4fff5255))
+
 ## [0.4.1](https://github.com/vaggeliskls/ContainrDog/compare/0.4.0...0.4.1) (2026-04-11)
 
 

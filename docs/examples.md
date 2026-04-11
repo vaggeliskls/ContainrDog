@@ -129,8 +129,7 @@ services:
   containrdog:
     image: ghcr.io/vaggeliskls/containrdog:latest
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /var/run/docker.sock:/var/run/docker.sock   # also needs write for compose
+      - /var/run/docker.sock:/var/run/docker.sock   # needs write access for docker-compose commands
     environment:
       - INTERVAL=5m
       - GITOPS_ENABLED=true
@@ -247,12 +246,13 @@ registry:
 Reference the same secret in your workloads:
 ```yaml
 spec:
-  imagePullSecrets:
-    - name: ghcr-pull-secret
   template:
     metadata:
       annotations:
         containrdog-enabled: "true"
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
 ```
 
 ---

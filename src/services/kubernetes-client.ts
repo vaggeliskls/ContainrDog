@@ -59,13 +59,13 @@ export class KubernetesClient implements IRuntimeClient {
 
       if (k8sConfig?.allNamespaces) {
         const response = await this.coreV1Api.listPodForAllNamespaces();
-        pods = response.body.items;
+        pods = response.items;
       } else {
         const namespaces = k8sConfig?.namespaces || ['default'];
         for (const ns of namespaces) {
           try {
-            const response = await this.coreV1Api.listNamespacedPod(ns);
-            pods.push(...response.body.items);
+            const response = await this.coreV1Api.listNamespacedPod({ namespace: ns });
+            pods.push(...response.items);
           } catch (error) {
             logger.warn(`⚠️  Skipping namespace "${ns}": ${error instanceof Error ? error.message : error}`);
           }
@@ -151,7 +151,6 @@ export class KubernetesClient implements IRuntimeClient {
       logger.error('❌ Failed to list Kubernetes pods:', error);
     }
 
-    logger.debug(`☸️  Found ${containers.length} containers to monitor`);
     return containers;
   }
 
@@ -185,28 +184,27 @@ export class KubernetesClient implements IRuntimeClient {
         },
       },
     };
-    const patchOptions = {
-      headers: { 'Content-Type': 'application/strategic-merge-patch+json' },
-    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const patchOptions: any = { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } };
 
     try {
       switch (workloadKind) {
         case 'Deployment':
           await this.appsV1Api.patchNamespacedDeployment(
-            workloadName, namespace, patch,
-            undefined, undefined, undefined, undefined, undefined, patchOptions
+            { name: workloadName, namespace, body: patch },
+            patchOptions
           );
           break;
         case 'StatefulSet':
           await this.appsV1Api.patchNamespacedStatefulSet(
-            workloadName, namespace, patch,
-            undefined, undefined, undefined, undefined, undefined, patchOptions
+            { name: workloadName, namespace, body: patch },
+            patchOptions
           );
           break;
         case 'DaemonSet':
           await this.appsV1Api.patchNamespacedDaemonSet(
-            workloadName, namespace, patch,
-            undefined, undefined, undefined, undefined, undefined, patchOptions
+            { name: workloadName, namespace, body: patch },
+            patchOptions
           );
           break;
         default:
@@ -231,8 +229,8 @@ export class KubernetesClient implements IRuntimeClient {
     for (const ownerRef of pod.metadata?.ownerReferences || []) {
       if (ownerRef.kind === 'ReplicaSet') {
         try {
-          const rs = await this.appsV1Api.readNamespacedReplicaSet(ownerRef.name, namespace);
-          for (const rsOwner of rs.body.metadata?.ownerReferences || []) {
+          const rs = await this.appsV1Api.readNamespacedReplicaSet({ name: ownerRef.name, namespace });
+          for (const rsOwner of rs.metadata?.ownerReferences || []) {
             if (rsOwner.kind === 'Deployment') {
               return { kind: 'Deployment', name: rsOwner.name };
             }

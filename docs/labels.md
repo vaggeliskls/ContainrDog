@@ -1,6 +1,8 @@
 # Labels & Annotations
 
-Per-container settings override global defaults. Docker uses labels; Kubernetes uses pod template annotations.
+Per-container labels and annotations override the global defaults set via environment variables (see [Configuration](configuration.md)). Only set a label if you want to override the global behaviour for that specific container — if a label is not set, the global value applies.
+
+Docker uses labels; Kubernetes uses pod template annotations.
 
 ## Enabling Monitoring
 

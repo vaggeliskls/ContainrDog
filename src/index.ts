@@ -116,9 +116,11 @@ class ContainerUpdater {
     if (this.config.labeledOnly) {
       logger.info(`  🔖 Label filter: ${this.config.label}=true`);
     }
-    logger.info(
-      `  🔐 Registry credentials: ${this.config.registryCredentials?.length || 0} configured`
-    );
+    if (this.config.registryCredentials && this.config.registryCredentials.length > 0) {
+      logger.info(`  🔐 Registry credentials: ${this.config.registryCredentials.map((c) => c.registry).join(', ')}`);
+    } else {
+      logger.info(`  🔐 Registry credentials: none`);
+    }
     if (this.config.ecr?.enabled) {
       logger.info(`  🔐 AWS ECR: enabled (region: ${this.config.ecr.region})`);
     }

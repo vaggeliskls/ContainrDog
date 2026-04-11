@@ -58,7 +58,7 @@ containrdog.image-label=org.opencontainers.image.revision
 - WEBHOOK_PROVIDER=generic
 ```
 
-JSON payload sent:
+**Container update** payload sent:
 ```json
 {
   "event": "container_update",
@@ -80,3 +80,30 @@ JSON payload sent:
 ```
 
 The `label` field is only present when `IMAGE_LABEL` is configured. `currentValue`/`newValue` are `null` if the label is not found on that image.
+
+**GitOps deploy** payload sent (when `WEBHOOK_NOTIFY_GITOPS=true`):
+```json
+{
+  "event": "gitops_deploy",
+  "status": "success",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "container": { "id": "abc123", "name": "myapp", "image": "ghcr.io/myorg/myapp:1.0.0" },
+  "changes": {
+    "commit": "a1b2c3d4e5f6...",
+    "previousCommit": "9z8y7x6w5v4u...",
+    "message": "chore: bump nginx to 1.26",
+    "filesChanged": 1
+  },
+  "error": null
+}
+```
+
+**Check cycle** payload sent (when `WEBHOOK_NOTIFY_CHECK=true`):
+```json
+{
+  "event": "check_complete",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "containersChecked": 5,
+  "updatesFound": 1
+}
+```

@@ -31,13 +31,46 @@ environment:
 - GITOPS_TOKEN=ghp_xxxxx
 ```
 
-**SSH:**
+**SSH / Deploy Keys:**
+
+A deploy key is an SSH key pair scoped to a single repository. Add the public key to your repo (GitHub: _Settings → Deploy keys_; GitLab: _Settings → Repository → Deploy keys_) and mount the private key into the container.
+
+Generate a key pair (no passphrase):
+```bash
+ssh-keygen -t ed25519 -C "containrdog" -f ./containrdog_deploy_key -N ""
+# containrdog_deploy_key     → private key (mount into container)
+# containrdog_deploy_key.pub → add to repo as a deploy key
+```
+
+Docker:
 ```yaml
 - GITOPS_AUTH_TYPE=ssh
-- GITOPS_SSH_KEY_PATH=/config/id_rsa
+- GITOPS_REPO_URL=git@github.com:myorg/myrepo.git
+- GITOPS_SSH_KEY_PATH=/keys/deploy_key
 volumes:
-  - ~/.ssh/id_rsa:/config/id_rsa:ro
+  - ./containrdog_deploy_key:/keys/deploy_key:ro
 ```
+
+Kubernetes — create a Secret with the private key and reference it in helm values:
+```bash
+kubectl create secret generic containrdog-deploy-key \
+  --from-file=deploy_key=./containrdog_deploy_key \
+  -n containrdog
+```
+
+```yaml
+# helm values
+gitops:
+  enabled: true
+  repoUrl: "git@github.com:myorg/myrepo.git"
+  authType: ssh
+  sshKeySecret: containrdog-deploy-key  # Secret name — key must be named "deploy_key"
+  sshKeyPath: /keys/deploy_key          # default, can be omitted
+```
+
+The chart mounts the secret at `/keys` with `0400` permissions automatically.
+
+> Note: host fingerprint verification is disabled (`StrictHostKeyChecking=no`), so no `known_hosts` setup is required.
 
 **Public repos:**
 ```yaml

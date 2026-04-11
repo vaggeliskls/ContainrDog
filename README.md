@@ -9,6 +9,12 @@
 
   📖 **[Documentation](https://vaggeliskls.github.io/ContainrDog)**
 
+  [![GitHub release](https://img.shields.io/github/v/release/vaggeliskls/ContainrDog)](https://github.com/vaggeliskls/ContainrDog/releases)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+  [![Docker Image](https://img.shields.io/badge/ghcr.io-containrdog-blue?logo=docker)](https://github.com/vaggeliskls/ContainrDog/pkgs/container/containrdog)
+  [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen?logo=node.js)](https://nodejs.org)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org)
+
   ---
 </div>
 

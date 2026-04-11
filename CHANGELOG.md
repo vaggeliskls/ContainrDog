@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.0](https://github.com/vaggeliskls/ContainrDog/compare/0.3.1...0.4.0) (2026-04-11)
+
+
+### Features
+
+* display registies and monitored containers ([60bee5c](https://github.com/vaggeliskls/ContainrDog/commit/60bee5c18bed33f168ab683820a20bdd013ec76a))
+* mount ssh gitops ssh key ([a2d0c1b](https://github.com/vaggeliskls/ContainrDog/commit/a2d0c1b79ff3ce7e8234ae968cb822111db4a40b))
+* update dependencies ([2bd0fb6](https://github.com/vaggeliskls/ContainrDog/commit/2bd0fb6dd139f0de9d15636286dabc59acccf5f4))
+
 ## [0.3.1](https://github.com/vaggeliskls/ContainrDog/compare/0.3.0...0.3.1) (2026-04-10)
 
 

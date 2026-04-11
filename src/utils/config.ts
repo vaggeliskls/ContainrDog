@@ -170,18 +170,23 @@ export class ConfigManager {
           const credentials: RegistryCredentials[] = [];
           type DockerAuthEntry = { auth?: string; username?: string; password?: string };
           for (const [registry, authData] of Object.entries(config.auths as Record<string, DockerAuthEntry>)) {
+            // Normalize registry key: strip scheme and collapse Docker Hub variants.
+            // docker config.json stores Docker Hub as "https://index.docker.io/v1/"
+            // but image references use "docker.io".
+            let normalizedRegistry = registry.replace(/^https?:\/\//, '');
+            if (normalizedRegistry.startsWith('index.docker.io')) {
+              normalizedRegistry = 'docker.io';
+            }
             if (authData.auth) {
-              // Decode base64 auth string
+              // Decode base64 auth string; use indexOf to handle passwords containing ":"
               const decoded = Buffer.from(authData.auth, 'base64').toString('utf-8');
-              const [username, password] = decoded.split(':');
-              credentials.push({
-                registry: registry.replace(/^https?:\/\//, ''),
-                username,
-                password,
-              });
+              const colonIndex = decoded.indexOf(':');
+              const username = decoded.substring(0, colonIndex);
+              const password = decoded.substring(colonIndex + 1);
+              credentials.push({ registry: normalizedRegistry, username, password });
             } else if (authData.username && authData.password) {
               credentials.push({
-                registry: registry.replace(/^https?:\/\//, ''),
+                registry: normalizedRegistry,
                 username: authData.username,
                 password: authData.password,
               });

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/vaggeliskls/ContainrDog/compare/0.4.2...0.4.3) (2026-04-12)
+
+
+### Bug Fixes
+
+* remove of match-tag ([ffd1bca](https://github.com/vaggeliskls/ContainrDog/commit/ffd1bca8b9088b9286fe4f6e37853289d1952460))
+
 ## [0.4.2](https://github.com/vaggeliskls/ContainrDog/compare/0.4.1...0.4.2) (2026-04-11)
 
 

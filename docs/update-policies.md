@@ -54,7 +54,6 @@ labels:
 image: myapp:latest
 labels:
   - containrdog.policy=force
-  - containrdog.match-tag=true  # Only check same tag, not all tags
 ```
 
 **Wildcard version range (glob policy):**

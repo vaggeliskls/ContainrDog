@@ -117,7 +117,6 @@ Or using the built-in webhook support:
     labels:
       - containrdog-enabled=true
       - containrdog.policy=force
-      - containrdog.match-tag=true   # only check 'latest', not all tags
 ```
 
 ---

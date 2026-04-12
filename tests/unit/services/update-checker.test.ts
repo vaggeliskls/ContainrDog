@@ -6,7 +6,6 @@ import { UpdatePolicy, UpdateType, ContainerInfo } from '../../../src/types';
 vi.mock('../../../src/utils/config', () => ({
   getConfig: vi.fn(() => ({
     policy: UpdatePolicy.ALL,
-    matchTag: false,
     globPattern: undefined,
   })),
 }));

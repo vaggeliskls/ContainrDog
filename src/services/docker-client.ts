@@ -39,7 +39,6 @@ export class DockerClient implements IRuntimeClient {
           labels,
           created: inspect.Created ? new Date(inspect.Created).getTime() : 0,
           policy: parsePolicyFromLabel(labels['containrdog.policy']),
-          matchTag: labels['containrdog.match-tag'] === 'true',
           globPattern: labels['containrdog.glob-pattern'],
           autoUpdate: parseAutoUpdateLabel(labels['containrdog.auto-update']),
           imageLabelKey: labels['containrdog.image-label'] || undefined,

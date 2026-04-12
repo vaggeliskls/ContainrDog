@@ -217,9 +217,6 @@ export class UpdateChecker {
     currentImage: ImageInfo
   ): Promise<ImageUpdateInfo | null> {
     try {
-      // For force policy with matchTag, only check the current tag
-      // Otherwise, we'd need to check all tags (not implemented here for simplicity)
-
       // Get current local image digest
       const localDigest = await this.runtimeClient.getImageDigest(container.image);
 

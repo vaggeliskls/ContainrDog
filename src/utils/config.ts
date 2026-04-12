@@ -46,9 +46,6 @@ export class ConfigManager {
     // Update policy (default: major - update all major, minor, and patch versions)
     const policy = this.parsePolicy(process.env.POLICY || 'major');
 
-    // Match tag (for force policy)
-    const matchTag = process.env.MATCH_TAG === 'true';
-
     // Glob pattern (for glob policy)
     const globPattern = process.env.GLOB_PATTERN;
 
@@ -85,7 +82,6 @@ export class ConfigManager {
       postUpdateCommands,
       logLevel,
       policy,
-      matchTag,
       globPattern,
       autoUpdate,
       imageLabelKey,

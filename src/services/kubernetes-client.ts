@@ -127,7 +127,6 @@ export class KubernetesClient implements IRuntimeClient {
               ? new Date(pod.metadata.creationTimestamp).getTime()
               : 0,
             policy: parsePolicyFromLabel(allLabels['containrdog.policy']),
-            matchTag: allLabels['containrdog.match-tag'] === 'true',
             globPattern: allLabels['containrdog.glob-pattern'],
             autoUpdate: parseAutoUpdateLabel(allLabels['containrdog.auto-update']),
             imageLabelKey: allLabels['containrdog.image-label'] || undefined,

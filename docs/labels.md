@@ -31,7 +31,6 @@ Set `LABELED=false` to monitor everything (the label is still used to opt-out wh
 | `containrdog-enabled` | `true`, `false` | Opt in/out of monitoring |
 | `containrdog.policy` | `all` `major` `minor` `patch` `force` `glob` | Update policy (see [Update Policies](update-policies.md)) |
 | `containrdog.auto-update` | `true`, `false` | Auto-update this container |
-| `containrdog.match-tag` | `true` | `force` policy: only update same tag |
 | `containrdog.glob-pattern` | e.g. `1.2*` | `glob` policy pattern |
 | `containrdog.pre-update-commands` | JSON array | Commands before update (see [Hooks](hooks.md)) |
 | `containrdog.post-update-commands` | JSON array | Commands after update |

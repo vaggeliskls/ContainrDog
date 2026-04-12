@@ -34,7 +34,6 @@ All configuration is via environment variables.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `GLOB_PATTERN` | — | Wildcard pattern for `glob` policy |
-| `MATCH_TAG` | `false` | `force` policy: only update if same tag |
 
 ## Commands (Hooks)
 

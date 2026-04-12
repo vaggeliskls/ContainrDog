@@ -50,9 +50,6 @@ services:
       # For glob policy: specify pattern
       # - GLOB_PATTERN=1.2*
 
-      # For force policy: match only same tag
-      # - MATCH_TAG=true
-
       # Auto-update containers when new versions are found (default: true)
       # Set to false to only detect and log updates without taking action
       - AUTO_UPDATE=true
@@ -165,9 +162,6 @@ services:
 
       # For glob policy, specify pattern (e.g., 1.2*)
       - containrdog.glob-pattern=1.2*
-
-      # For force policy with match-tag
-      # - containrdog.match-tag=true
 
       # GitOps configuration per container
       # Option 1: Use global repository with specific watch paths

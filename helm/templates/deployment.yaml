@@ -58,10 +58,6 @@ spec:
             - name: GLOB_PATTERN
               value: {{ .Values.config.globPattern | quote }}
             {{- end }}
-            {{- if .Values.config.matchTag }}
-            - name: MATCH_TAG
-              value: "true"
-            {{- end }}
             {{- if .Values.config.imageLabel }}
             - name: IMAGE_LABEL
               value: {{ .Values.config.imageLabel | quote }}

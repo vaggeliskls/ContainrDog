@@ -20,7 +20,6 @@ config:
   logLevel: "info"
   policy: "major" # all | major | minor | patch | force | glob
   globPattern: "" # used with policy=glob
-  matchTag: false # used with policy=force
   autoUpdate: true
   labeled: true # only monitor annotated workloads
   label: "containrdog-enabled"

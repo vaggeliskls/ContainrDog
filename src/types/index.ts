@@ -61,7 +61,6 @@ export interface Config {
   postUpdateCommands?: string[]; // Commands to run after update
   logLevel: string;
   policy: UpdatePolicy;
-  matchTag: boolean; // For force policy: only update if same tag
   globPattern?: string; // For glob policy
   autoUpdate: boolean; // Global auto-update setting
   imageLabelKey?: string; // Image label to display in notifications (e.g. org.opencontainers.image.revision)
@@ -100,7 +99,6 @@ export interface ContainerInfo {
   labels: Record<string, string>;
   created: number;
   policy?: UpdatePolicy;
-  matchTag?: boolean;
   globPattern?: string;
   autoUpdate?: boolean;
   imageLabelKey?: string;

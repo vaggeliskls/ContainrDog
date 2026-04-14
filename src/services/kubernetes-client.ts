@@ -188,8 +188,7 @@ export class KubernetesClient implements IRuntimeClient {
         },
       },
     };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const patchOptions: any = { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } };
+    const patchOptions = k8s.setHeaderOptions('Content-Type', k8s.PatchStrategy.StrategicMergePatch);
 
     try {
       switch (workloadKind) {

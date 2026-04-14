@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.4](https://github.com/vaggeliskls/ContainrDog/compare/0.4.3...0.4.4) (2026-04-14)
+
+
+### Bug Fixes
+
+* k8s headers ([2055c24](https://github.com/vaggeliskls/ContainrDog/commit/2055c240e3eccd9ce5a067571b6745d4b365670f))
+
 ## [0.4.3](https://github.com/vaggeliskls/ContainrDog/compare/0.4.2...0.4.3) (2026-04-12)
 
 

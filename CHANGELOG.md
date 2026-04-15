@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.10](https://github.com/vaggeliskls/ContainrDog/compare/0.4.9...0.4.10) (2026-04-15)
+
+
+### Bug Fixes
+
+* get labels from image ([de0b206](https://github.com/vaggeliskls/ContainrDog/commit/de0b206b018db95ad63d0c0cc1b3b3731960c420))
+
 ## [0.4.9](https://github.com/vaggeliskls/ContainrDog/compare/0.4.8...0.4.9) (2026-04-15)
 
 

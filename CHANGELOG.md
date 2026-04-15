@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.5](https://github.com/vaggeliskls/ContainrDog/compare/0.4.4...0.4.5) (2026-04-15)
+
+
+### Bug Fixes
+
+* openshift and gitops key ([d80a990](https://github.com/vaggeliskls/ContainrDog/commit/d80a990dab0d99bb3a0bf7181c360db46275a05b))
+
 ## [0.4.4](https://github.com/vaggeliskls/ContainrDog/compare/0.4.3...0.4.4) (2026-04-14)
 
 

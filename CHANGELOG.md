@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.6](https://github.com/vaggeliskls/ContainrDog/compare/0.4.5...0.4.6) (2026-04-15)
+
+
+### Bug Fixes
+
+* git clone ([c355dc0](https://github.com/vaggeliskls/ContainrDog/commit/c355dc054a0a1c27b6ca940cbfcc33df42c135ae))
+
 ## [0.4.5](https://github.com/vaggeliskls/ContainrDog/compare/0.4.4...0.4.5) (2026-04-15)
 
 

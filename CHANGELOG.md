@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.9](https://github.com/vaggeliskls/ContainrDog/compare/0.4.8...0.4.9) (2026-04-15)
+
+
+### Bug Fixes
+
+* ssh usage instead ([2a5c74f](https://github.com/vaggeliskls/ContainrDog/commit/2a5c74fb37236b369cbccc470dc8d09eedc38967))
+
 ## [0.4.8](https://github.com/vaggeliskls/ContainrDog/compare/0.4.7...0.4.8) (2026-04-15)
 
 

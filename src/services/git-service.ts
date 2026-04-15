@@ -1,6 +1,8 @@
 import simpleGit, { SimpleGit, SimpleGitOptions } from 'simple-git';
 import { minimatch } from 'minimatch';
 import { existsSync, mkdirSync } from 'fs';
+import { access, stat } from 'fs/promises';
+import { constants as fsConstants } from 'fs';
 import { logger } from '../utils/logger';
 import { GitOpsConfig, GitAuthType, GitChangeInfo } from '../types';
 
@@ -43,6 +45,20 @@ export class GitService {
    */
   async initialize(): Promise<boolean> {
     try {
+      if (this.config.authType === GitAuthType.SSH && this.config.sshKeyPath) {
+        try {
+          await access(this.config.sshKeyPath, fsConstants.R_OK);
+        } catch {
+          const st = await stat(this.config.sshKeyPath);
+          const mode = (st.mode & 0o777).toString(8);
+          throw new Error(
+            `GitOps: SSH key at ${this.config.sshKeyPath} is not readable ` +
+            `(mode ${mode}, uid ${process.getuid?.()}, gid ${process.getgid?.()}). ` +
+            `Ensure the secret is mounted with defaultMode: 0440 and the runtime user can read it.`
+          );
+        }
+      }
+
       const repoPath = `${this.config.clonePath}/.git`;
 
       if (!existsSync(repoPath)) {

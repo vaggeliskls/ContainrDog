@@ -113,9 +113,11 @@ export class GitService {
       // Fetch latest changes
       await this.git.fetch();
 
-      // Get current HEAD commit
-      const currentLog = await this.git.log(['-1']);
-      const currentCommit = currentLog.latest?.hash || null;
+      // Get the latest commit on the remote tracking branch (fetch updates
+      // origin/<branch> but not local HEAD — we must read the remote ref,
+      // otherwise currentCommit === lastCommit forever).
+      const remoteRef = `origin/${this.config.branch}`;
+      const currentCommit = (await this.git.revparse([remoteRef])).trim() || null;
 
       if (!currentCommit) {
         logger.warn('⚠️  GitOps: Could not determine current commit');
@@ -156,6 +158,8 @@ export class GitService {
 
       // Pull the changes
       await this.pullChanges();
+
+      const currentLog = await this.git.log(['-1']);
 
       const changeInfo: GitChangeInfo = {
         changedFiles: relevantFiles,

@@ -31,7 +31,7 @@ export class GitService {
       }
       // Set SSH command with specific key for this git instance
       options.config = [
-        `core.sshCommand=ssh -i ${this.config.sshKeyPath} -o StrictHostKeyChecking=no -o IdentitiesOnly=yes`,
+        `core.sshCommand=ssh -i ${this.config.sshKeyPath} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes`,
       ];
     }
 

@@ -20,9 +20,10 @@ spec:
       {{- end }}
     spec:
       serviceAccountName: {{ include "containrdog.serviceAccountName" . }}
-      {{- with .Values.podSecurityContext }}
+      {{- $podSec := include "containrdog.podSecurityContext" . | trim }}
+      {{- if $podSec }}
       securityContext:
-        {{- toYaml . | nindent 8 }}
+        {{- $podSec | nindent 8 }}
       {{- end }}
       containers:
         - name: containrdog
@@ -212,7 +213,7 @@ spec:
         - name: gitops-ssh-key
           secret:
             secretName: {{ .Values.gitops.sshKeySecret }}
-            defaultMode: 0400
+            defaultMode: 0440
         {{- end }}
       {{- end }}
 

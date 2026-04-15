@@ -3,16 +3,10 @@ import { ImageInfo, RegistryCredentials, RegistryManifest } from '../types';
 import { logger } from '../utils/logger';
 import { getConfig } from '../utils/config';
 
-interface CachedToken {
-  token: string;
-  expiresAt: number;
-}
-
 export class RegistryService {
   private axiosInstance: AxiosInstance;
   private credentials: Map<string, RegistryCredentials>;
   private ecrCredentials?: Map<string, RegistryCredentials>;
-  private tokenCache: Map<string, CachedToken> = new Map();
 
   constructor() {
     this.axiosInstance = axios.create({
@@ -57,12 +51,6 @@ export class RegistryService {
   }
 
   private async getAuthToken(registry: string, repository: string): Promise<string | undefined> {
-    const cacheKey = `${registry}:${repository}`;
-    const cached = this.tokenCache.get(cacheKey);
-    if (cached && Date.now() < cached.expiresAt) {
-      return cached.token;
-    }
-
     const creds = this.getCredentials(registry);
 
     try {
@@ -109,12 +97,7 @@ export class RegistryService {
       }
 
       const response = await this.axiosInstance.get(authUrl, { headers });
-      const token = response.data.token || response.data.access_token;
-      if (token) {
-        // Cache for 50 minutes (tokens typically expire in 60 minutes)
-        this.tokenCache.set(cacheKey, { token, expiresAt: Date.now() + 50 * 60 * 1000 });
-      }
-      return token;
+      return response.data.token || response.data.access_token;
     } catch (error) {
       logger.warn(`⚠️  Failed to get auth token for ${registry}/${repository}:`, error);
       return undefined;

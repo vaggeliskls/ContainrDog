@@ -31,13 +31,19 @@ export class GitService {
       if (!existsSync(this.config.sshKeyPath)) {
         throw new Error(`GitOps: SSH key not found at ${this.config.sshKeyPath}`);
       }
-      // Set SSH command with specific key for this git instance
-      options.config = [
-        `core.sshCommand=ssh -i ${this.config.sshKeyPath} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes`,
-      ];
     }
 
     this.git = simpleGit(options);
+
+    // GIT_SSH_COMMAND is honored by every git invocation (clone included),
+    // whereas `-c core.sshCommand` passed via simple-git's `config` option
+    // does not reliably propagate through `git clone` on all git versions.
+    if (this.config.authType === GitAuthType.SSH && this.config.sshKeyPath) {
+      this.git.env({
+        ...process.env,
+        GIT_SSH_COMMAND: `ssh -i ${this.config.sshKeyPath} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes`,
+      });
+    }
   }
 
   /**

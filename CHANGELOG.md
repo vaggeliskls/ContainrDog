@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.7](https://github.com/vaggeliskls/ContainrDog/compare/0.4.6...0.4.7) (2026-04-15)
+
+
+### Bug Fixes
+
+* git service use secret ([47c1971](https://github.com/vaggeliskls/ContainrDog/commit/47c197127fb02eec3123d0459d9434c1bdfbd435))
+
 ## [0.4.6](https://github.com/vaggeliskls/ContainrDog/compare/0.4.5...0.4.6) (2026-04-15)
 
 

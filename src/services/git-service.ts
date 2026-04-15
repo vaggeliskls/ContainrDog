@@ -26,14 +26,15 @@ export class GitService {
       maxConcurrentProcesses: 6,
     };
 
-    // Configure SSH for this specific instance if using SSH auth
+    // Configure SSH for this specific instance if using SSH auth.
+    // simple-git's `options.config` (which maps to `git -c ...`) does not propagate
+    // to `clone` in practice, so we set GIT_SSH_COMMAND on the process env — git
+    // always honors it for every invocation including clone.
     if (this.config.authType === GitAuthType.SSH && this.config.sshKeyPath) {
       if (!existsSync(this.config.sshKeyPath)) {
         throw new Error(`GitOps: SSH key not found at ${this.config.sshKeyPath}`);
       }
-      options.config = [
-        `core.sshCommand=ssh -i ${this.config.sshKeyPath} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes`,
-      ];
+      process.env.GIT_SSH_COMMAND = `ssh -i ${this.config.sshKeyPath} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes`;
     }
 
     this.git = simpleGit(options);

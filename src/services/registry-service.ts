@@ -3,10 +3,16 @@ import { ImageInfo, RegistryCredentials, RegistryManifest } from '../types';
 import { logger } from '../utils/logger';
 import { getConfig } from '../utils/config';
 
+interface CachedToken {
+  token: string;
+  expiresAt: number;
+}
+
 export class RegistryService {
   private axiosInstance: AxiosInstance;
   private credentials: Map<string, RegistryCredentials>;
   private ecrCredentials?: Map<string, RegistryCredentials>;
+  private tokenCache: Map<string, CachedToken> = new Map();
 
   constructor() {
     this.axiosInstance = axios.create({
@@ -51,6 +57,12 @@ export class RegistryService {
   }
 
   private async getAuthToken(registry: string, repository: string): Promise<string | undefined> {
+    const cacheKey = `${registry}:${repository}`;
+    const cached = this.tokenCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.token;
+    }
+
     const creds = this.getCredentials(registry);
 
     try {
@@ -97,7 +109,12 @@ export class RegistryService {
       }
 
       const response = await this.axiosInstance.get(authUrl, { headers });
-      return response.data.token || response.data.access_token;
+      const token = response.data.token || response.data.access_token;
+      if (token) {
+        // Cache for 50 minutes (tokens typically expire in 60 minutes)
+        this.tokenCache.set(cacheKey, { token, expiresAt: Date.now() + 50 * 60 * 1000 });
+      }
+      return token;
     } catch (error) {
       logger.warn(`⚠️  Failed to get auth token for ${registry}/${repository}:`, error);
       return undefined;
@@ -161,7 +178,12 @@ export class RegistryService {
         : `https://${registry}`;
 
       const authHeaders: Record<string, string> = {
-        Accept: 'application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json',
+        Accept: [
+          'application/vnd.docker.distribution.manifest.v2+json',
+          'application/vnd.oci.image.manifest.v1+json',
+          'application/vnd.docker.distribution.manifest.list.v2+json',
+          'application/vnd.oci.image.index.v1+json',
+        ].join(', '),
       };
       if (token) authHeaders.Authorization = `Bearer ${token}`;
 
@@ -170,8 +192,33 @@ export class RegistryService {
         { headers: authHeaders }
       );
 
-      const configDigest: string | undefined = manifestResp.data?.config?.digest;
-      if (!configDigest) return undefined;
+      let configDigest: string | undefined = manifestResp.data?.config?.digest;
+
+      // Handle manifest list / OCI index (multi-arch images): pick the first manifest entry
+      if (!configDigest && manifestResp.data?.manifests?.length > 0) {
+        const firstManifest = manifestResp.data.manifests[0];
+        const platformDigest: string | undefined = firstManifest?.digest;
+        if (!platformDigest) {
+          logger.debug(`No platform manifest digest found for ${repository}:${tag}`);
+          return undefined;
+        }
+
+        const platformHeaders: Record<string, string> = {
+          Accept: 'application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json',
+        };
+        if (token) platformHeaders.Authorization = `Bearer ${token}`;
+
+        const platformResp = await this.axiosInstance.get(
+          `${registryUrl}/v2/${repository}/manifests/${platformDigest}`,
+          { headers: platformHeaders }
+        );
+        configDigest = platformResp.data?.config?.digest;
+      }
+
+      if (!configDigest) {
+        logger.debug(`No config digest found in manifest for ${repository}:${tag}`);
+        return undefined;
+      }
 
       const blobHeaders: Record<string, string> = {};
       if (token) blobHeaders.Authorization = `Bearer ${token}`;
@@ -185,7 +232,8 @@ export class RegistryService {
         blobResp.data?.config?.Labels ?? blobResp.data?.container_config?.Labels;
 
       return labels?.[labelKey];
-    } catch {
+    } catch (error) {
+      logger.warn(`⚠️  Failed to get label '${labelKey}' for ${imageInfo.repository}:${imageInfo.tag}: ${error}`);
       return undefined;
     }
   }

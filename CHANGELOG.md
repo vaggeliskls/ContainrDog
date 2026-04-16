@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/vaggeliskls/ContainrDog/compare/0.4.12...0.5.0) (2026-04-16)
+
+
+### Features
+
+* update node to 24 ([6298c8c](https://github.com/vaggeliskls/ContainrDog/commit/6298c8cc4e8d4ce08cfd2c92632c006696a752e2))
+
+
+### Bug Fixes
+
+* gitops global command ([cd3d666](https://github.com/vaggeliskls/ContainrDog/commit/cd3d66669a69c1f3c467b9cd1e3e520304cf31eb))
+
 ## [0.4.12](https://github.com/vaggeliskls/ContainrDog/compare/0.4.11...0.4.12) (2026-04-15)
 
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.1](https://github.com/vaggeliskls/ContainrDog/compare/0.6.0...0.6.1) (2026-04-16)
+
+
+### Bug Fixes
+
+* clusterrole add list namespaces ([3a58f95](https://github.com/vaggeliskls/ContainrDog/commit/3a58f95c4d7cbf6757fe198b3f337b60f27ccddb))
+* extra rules from values ([36a6ca4](https://github.com/vaggeliskls/ContainrDog/commit/36a6ca40737e175efa9e9fef59c76a0b95aa12c1))
+
 ## [0.6.0](https://github.com/vaggeliskls/ContainrDog/compare/0.5.0...0.6.0) (2026-04-16)
 
 

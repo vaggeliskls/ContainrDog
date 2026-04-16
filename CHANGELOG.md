@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.12](https://github.com/vaggeliskls/ContainrDog/compare/0.4.11...0.4.12) (2026-04-15)
+
+
+### Bug Fixes
+
+* gitops update ([b1e1483](https://github.com/vaggeliskls/ContainrDog/commit/b1e14837afd793ae734351204006daeeb7112c2d))
+
 ## [0.4.11](https://github.com/vaggeliskls/ContainrDog/compare/0.4.10...0.4.11) (2026-04-15)
 
 

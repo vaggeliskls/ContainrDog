@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/vaggeliskls/ContainrDog/compare/0.5.0...0.6.0) (2026-04-16)
+
+
+### Features
+
+* add kubed cli ([933fe37](https://github.com/vaggeliskls/ContainrDog/commit/933fe37337db32ba6f2f8fa7b3f7d5c9eff477b5))
+
 ## [0.5.0](https://github.com/vaggeliskls/ContainrDog/compare/0.4.12...0.5.0) (2026-04-16)
 
 

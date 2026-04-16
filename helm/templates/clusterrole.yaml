@@ -9,13 +9,13 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list"]
-  - apiGroups: [""]
-    resources: ["namespaces"]
-    verbs: ["get"]
   - apiGroups: ["apps"]
     resources: ["replicasets"]
     verbs: ["get"]
   - apiGroups: ["apps"]
     resources: ["deployments", "statefulsets", "daemonsets"]
     verbs: ["get", "list", "patch"]
+{{- with .Values.rbac.extraRules }}
+  {{- toYaml . | nindent 2 }}
+{{- end }}
 {{- end }}

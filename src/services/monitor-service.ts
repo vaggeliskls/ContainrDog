@@ -236,16 +236,14 @@ export class MonitorService {
               });
 
               if (affectedContainers.length > 0) {
-                for (const container of affectedContainers) {
-                  const intervalChange: GitChangeInfo = {
-                    changedFiles: [],
-                    previousCommit: '',
-                    currentCommit: '',
-                    commitMessage: 'Interval-based execution',
-                    timestamp: new Date(),
-                  };
-                  await this.executeGitOpsCommands(container, intervalChange);
-                }
+                const intervalChange: GitChangeInfo = {
+                  changedFiles: [],
+                  previousCommit: '',
+                  currentCommit: '',
+                  commitMessage: 'Interval-based execution',
+                  timestamp: new Date(),
+                };
+                await this.dispatchGlobalGitOps(affectedContainers, intervalChange);
               }
             } else {
               const changes = await this.gitService.checkForChanges();
@@ -255,10 +253,7 @@ export class MonitorService {
 
                 if (affectedContainers.length > 0) {
                   logger.info(`📦 GitOps (Global): ${affectedContainers.length} container(s) affected by changes`);
-
-                  for (const container of affectedContainers) {
-                    await this.executeGitOpsCommands(container, changes);
-                  }
+                  await this.dispatchGlobalGitOps(affectedContainers, changes);
                 }
               }
             }
@@ -366,6 +361,122 @@ export class MonitorService {
       }
     } catch (error) {
       logger.error(`❌ GitOps check failed for container ${container.name}:`, error);
+    }
+  }
+
+  /**
+   * Dispatch a global-GitOps change to affected containers.
+   * Containers with their own gitops-commands label run those per container (so
+   * $CONTAINER_* env vars resolve per pod). Containers relying on the global
+   * commands share a single execution — otherwise N pods would re-run the same
+   * cluster-wide command N times.
+   */
+  private async dispatchGlobalGitOps(
+    affectedContainers: ContainerInfo[],
+    changes: GitChangeInfo
+  ): Promise<void> {
+    const config = getConfig();
+    const perContainer: ContainerInfo[] = [];
+    const globalCommandConsumers: ContainerInfo[] = [];
+
+    for (const container of affectedContainers) {
+      if (container.gitopsCommands && container.gitopsCommands.length > 0) {
+        perContainer.push(container);
+      } else {
+        globalCommandConsumers.push(container);
+      }
+    }
+
+    for (const container of perContainer) {
+      await this.executeGitOpsCommands(container, changes);
+    }
+
+    const globalCommands = config.gitops?.commands;
+    if (globalCommandConsumers.length > 0 && globalCommands && globalCommands.length > 0) {
+      await this.executeGlobalGitOpsCommands(globalCommandConsumers, changes);
+    }
+  }
+
+  /**
+   * Execute the globally configured GitOps commands exactly once for a change,
+   * regardless of how many containers are affected.
+   */
+  private async executeGlobalGitOpsCommands(
+    affectedContainers: ContainerInfo[],
+    changes: GitChangeInfo
+  ): Promise<void> {
+    const config = getConfig();
+    const commands = config.gitops?.commands;
+
+    if (!commands || commands.length === 0) {
+      return;
+    }
+
+    const clonePath = config.gitops?.clonePath || '/tmp/gitops-repo';
+    const quietMode = config.gitops?.quietMode ?? false;
+
+    logger.info(`📦 GitOps (Global): Executing commands once for ${affectedContainers.length} affected container(s)...`);
+    logger.info(`   📁 Working directory: ${clonePath}`);
+
+    try {
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        GIT_COMMIT: changes.currentCommit,
+        GIT_PREVIOUS_COMMIT: changes.previousCommit,
+        GIT_COMMIT_MESSAGE: changes.commitMessage,
+        GIT_CHANGED_FILES: changes.changedFiles.join(','),
+        GITOPS_CLONE_PATH: clonePath,
+        AFFECTED_CONTAINERS: affectedContainers.map((c) => c.name).join(','),
+      };
+
+      for (const command of commands) {
+        logger.info(`   💻 Executing: ${command}`);
+
+        let processedCommand = command;
+        Object.entries(env).forEach(([key, value]) => {
+          processedCommand = processedCommand.replace(new RegExp(`\\$${key}`, 'g'), value || '');
+        });
+
+        await new Promise<void>((resolve, reject) => {
+          exec(processedCommand, { env, cwd: clonePath }, (error, stdout, stderr) => {
+            if (error) {
+              logger.error(`   ❌ Command failed: ${error.message}`);
+              reject(error);
+              return;
+            }
+            if (!quietMode && stdout) {
+              logger.info(`   📤 ${stdout.trim()}`);
+            }
+            if (stderr) {
+              logger.warn(`   ⚠️  ${stderr.trim()}`);
+            }
+            resolve();
+          });
+        });
+      }
+
+      if (!quietMode) {
+        logger.info(`   ✅ GitOps (Global) commands completed`);
+      }
+
+      if (this.webhookService) {
+        for (const container of affectedContainers) {
+          await this.webhookService.sendGitOpsNotification(container, changes, true);
+        }
+      }
+    } catch (error) {
+      logger.error(`   ❌ GitOps (Global) commands failed:`, error);
+
+      if (this.webhookService) {
+        for (const container of affectedContainers) {
+          await this.webhookService.sendGitOpsNotification(
+            container,
+            changes,
+            false,
+            error instanceof Error ? error.message : String(error)
+          );
+        }
+      }
     }
   }
 

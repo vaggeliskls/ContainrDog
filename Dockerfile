@@ -15,7 +15,10 @@ RUN apk add --no-cache \
     make \
     jq \
     shadow \
-    && rm -rf /var/cache/apk/*
+    && rm -rf /var/cache/apk/* \
+    && ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') \
+    && curl -fsSL "https://github.com/vaggeliskls/kubed/releases/download/1.0.0/kubed-1.0.0-linux-${ARCH}" -o /usr/local/bin/kubed \
+    && chmod +x /usr/local/bin/kubed
 
 # Use existing node user (UID:GID 1000:1000) and set permissions
 RUN mkdir -p /app \

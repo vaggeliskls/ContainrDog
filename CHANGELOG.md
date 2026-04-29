@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.7](https://github.com/vaggeliskls/ContainrDog/compare/0.6.6...0.6.7) (2026-04-29)
+
+
+### Bug Fixes
+
+* **labels:** get labels on debug ([ececcc3](https://github.com/vaggeliskls/ContainrDog/commit/ececcc3f44271606d5ff18aa41677dffff1b8625))
+
 ## [0.6.6](https://github.com/vaggeliskls/ContainrDog/compare/0.6.5...0.6.6) (2026-04-29)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.4](https://github.com/vaggeliskls/ContainrDog/compare/0.6.3...0.6.4) (2026-04-29)
+
+
+### Bug Fixes
+
+* existingClusterRoleName ([03af527](https://github.com/vaggeliskls/ContainrDog/commit/03af5275abe75f2b0fabeec3b02bd79793c5f152))
+
 ## [0.6.3](https://github.com/vaggeliskls/ContainrDog/compare/0.6.2...0.6.3) (2026-04-29)
 
 

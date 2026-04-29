@@ -20,6 +20,7 @@ spec:
       {{- end }}
     spec:
       serviceAccountName: {{ include "containrdog.serviceAccountName" . }}
+      enableServiceLinks: {{ .Values.enableServiceLinks }}
       {{- $podSec := include "containrdog.podSecurityContext" . | trim }}
       {{- if $podSec }}
       securityContext:

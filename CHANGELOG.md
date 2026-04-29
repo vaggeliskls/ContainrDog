@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.11](https://github.com/vaggeliskls/ContainrDog/compare/0.6.10...0.6.11) (2026-04-29)
+
+
+### Bug Fixes
+
+* **helm:** enableServiceLinks: false ([7c5d417](https://github.com/vaggeliskls/ContainrDog/commit/7c5d4174cbc5202d244dcce5c1fe3ce181270fc4))
+
 ## [0.6.10](https://github.com/vaggeliskls/ContainrDog/compare/0.6.9...0.6.10) (2026-04-29)
 
 

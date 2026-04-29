@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.10](https://github.com/vaggeliskls/ContainrDog/compare/0.6.9...0.6.10) (2026-04-29)
+
+
+### Bug Fixes
+
+* **helm:** cluster admin and extra rules ([ff526bb](https://github.com/vaggeliskls/ContainrDog/commit/ff526bbd84f384da515d02d152c6867690b9116f))
+
 ## [0.6.9](https://github.com/vaggeliskls/ContainrDog/compare/0.6.8...0.6.9) (2026-04-29)
 
 

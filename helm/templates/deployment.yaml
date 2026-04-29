@@ -63,6 +63,10 @@ spec:
             - name: IMAGE_LABEL
               value: {{ .Values.config.imageLabel | quote }}
             {{- end }}
+            {{- if .Values.config.labelFetchTimeout }}
+            - name: LABEL_FETCH_TIMEOUT
+              value: {{ .Values.config.labelFetchTimeout | quote }}
+            {{- end }}
 
             # Hooks
             {{- if .Values.hooks.preUpdateCommands }}

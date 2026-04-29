@@ -3,10 +3,16 @@ import { ImageInfo, RegistryCredentials, RegistryManifest } from '../types';
 import { logger } from '../utils/logger';
 import { getConfig } from '../utils/config';
 
+interface CachedToken {
+  token: string;
+  expiresAt: number;
+}
+
 export class RegistryService {
   private axiosInstance: AxiosInstance;
   private credentials: Map<string, RegistryCredentials>;
   private ecrCredentials?: Map<string, RegistryCredentials>;
+  private tokenCache: Map<string, CachedToken> = new Map();
 
   constructor() {
     this.axiosInstance = axios.create({
@@ -51,6 +57,12 @@ export class RegistryService {
   }
 
   private async getAuthToken(registry: string, repository: string): Promise<string | undefined> {
+    const cacheKey = `${registry}/${repository}`;
+    const cached = this.tokenCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.token;
+    }
+
     const creds = this.getCredentials(registry);
 
     try {
@@ -58,32 +70,25 @@ export class RegistryService {
       let authHeader: string | undefined;
 
       if (this.isECRRegistry(registry)) {
-        // AWS ECR - uses Basic auth directly (no separate token endpoint)
-        // The ECR authorization token IS the password for Basic auth
         if (creds) {
           logger.debug(`Using ECR Basic auth for ${registry}`);
-          // ECR tokens are already in the format needed - just use password as bearer token
           return creds.password;
         } else {
           logger.warn(`⚠️  No ECR credentials available for ${registry}`);
           return undefined;
         }
       } else if (registry === 'docker.io') {
-        // Docker Hub
         authUrl = `https://auth.docker.io/token?service=registry.docker.io&scope=repository:${repository}:pull`;
         if (creds) {
           const basicAuth = Buffer.from(`${creds.username}:${creds.password}`).toString('base64');
           authHeader = `Basic ${basicAuth}`;
         }
       } else if (registry === 'ghcr.io') {
-        // GitHub Container Registry
         authUrl = `https://ghcr.io/token?scope=repository:${repository}:pull`;
         if (creds) {
-          authHeader = `Bearer ${creds.password}`; // GitHub uses PAT as password
+          authHeader = `Bearer ${creds.password}`;
         }
       } else {
-        // Generic registry - try to get auth endpoint
-        // For private registries, this may need to be customized
         authUrl = `https://${registry}/v2/token?scope=repository:${repository}:pull`;
         if (creds) {
           const basicAuth = Buffer.from(`${creds.username}:${creds.password}`).toString('base64');
@@ -97,7 +102,14 @@ export class RegistryService {
       }
 
       const response = await this.axiosInstance.get(authUrl, { headers });
-      return response.data.token || response.data.access_token;
+      const token: string | undefined = response.data.token || response.data.access_token;
+
+      if (token) {
+        const ttlSeconds: number = response.data.expires_in ?? 240;
+        this.tokenCache.set(cacheKey, { token, expiresAt: Date.now() + ttlSeconds * 1000 });
+      }
+
+      return token;
     } catch (error) {
       logger.warn(`⚠️  Failed to get auth token for ${registry}/${repository}:`, error);
       return undefined;
@@ -175,6 +187,12 @@ export class RegistryService {
         { headers: authHeaders }
       );
 
+      // OCI annotations live directly on the manifest — no blob fetch needed
+      const manifestAnnotations: Record<string, string> | undefined = manifestResp.data?.annotations;
+      if (manifestAnnotations?.[labelKey] !== undefined) {
+        return manifestAnnotations[labelKey];
+      }
+
       let configDigest: string | undefined = manifestResp.data?.config?.digest;
 
       // Handle manifest list / OCI index (multi-arch images): pick the first manifest entry
@@ -195,6 +213,13 @@ export class RegistryService {
           `${registryUrl}/v2/${repository}/manifests/${platformDigest}`,
           { headers: platformHeaders }
         );
+
+        // Check platform manifest annotations too
+        const platformAnnotations: Record<string, string> | undefined = platformResp.data?.annotations;
+        if (platformAnnotations?.[labelKey] !== undefined) {
+          return platformAnnotations[labelKey];
+        }
+
         configDigest = platformResp.data?.config?.digest;
       }
 

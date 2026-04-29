@@ -55,6 +55,11 @@ export class ConfigManager {
     // Image label to display in notifications (optional)
     const imageLabelKey = process.env.IMAGE_LABEL || undefined;
 
+    // Timeout for fetching image label values (default: 30s)
+    const labelFetchTimeout = process.env.LABEL_FETCH_TIMEOUT
+      ? parseInt(process.env.LABEL_FETCH_TIMEOUT, 10) * 1000
+      : 30_000;
+
     // Webhook configuration
     const webhook = this.parseWebhookConfig();
 
@@ -85,6 +90,7 @@ export class ConfigManager {
       globPattern,
       autoUpdate,
       imageLabelKey,
+      labelFetchTimeout,
       webhook,
       gitops,
       ecr,

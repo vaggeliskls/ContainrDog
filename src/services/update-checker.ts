@@ -40,15 +40,10 @@ export class UpdateChecker {
     const policy = container.policy || config.policy;
     const globPattern = container.globPattern || config.globPattern;
 
-    logger.debug(
-      `Checking update for ${container.name} (${container.image}) with policy: ${policy}`
-    );
-
     const labelKey = container.imageLabelKey || config.imageLabelKey;
-    if (labelKey) {
-      const labelValue = await this.registryService.getImageLabelValue(currentImage, labelKey);
-      logger.debug(`  🏷️  ${container.name} image label (${labelKey}): ${labelValue ?? 'not found'}`);
-    }
+    logger.debug(
+      `Checking update for ${container.name} (${container.image}) with policy: ${policy}${labelKey ? `, label: ${labelKey}` : ''}`
+    );
 
     // Force policy: always check digest, even for non-semver tags
     if (policy === UpdatePolicy.FORCE) {
@@ -126,7 +121,7 @@ export class UpdateChecker {
           currentImage,
           availableImage,
           updateType: UpdateType.SEMANTIC_VERSION,
-          ...await this.fetchLabelValues(container, currentImage, availableImage),
+          ...(await this.fetchLabelValues(container, currentImage, availableImage)),
         };
       }
 
@@ -201,10 +196,24 @@ export class UpdateChecker {
     const labelKey = container.imageLabelKey || config.imageLabelKey;
     if (!labelKey) return {};
 
-    const [currentLabelValue, availableLabelValue] = await Promise.all([
+    const LABEL_FETCH_TIMEOUT_MS = config.labelFetchTimeout ?? 30_000;
+
+    const timeout = new Promise<[undefined, undefined]>((resolve) =>
+      setTimeout(() => resolve([undefined, undefined]), LABEL_FETCH_TIMEOUT_MS)
+    );
+
+    const fetch = Promise.all([
       this.registryService.getImageLabelValue(currentImage, labelKey),
       this.registryService.getImageLabelValue(availableImage, labelKey),
     ]);
+
+    const [currentLabelValue, availableLabelValue] = await Promise.race([fetch, timeout]);
+
+    if (currentLabelValue === undefined && availableLabelValue === undefined) {
+      logger.debug(
+        `Label fetch timed out or failed for ${container.name}, continuing without label values`
+      );
+    }
 
     return { imageLabelKey: labelKey, currentLabelValue, availableLabelValue };
   }
@@ -250,7 +259,7 @@ export class UpdateChecker {
           currentImage,
           availableImage,
           updateType: UpdateType.DIGEST_CHANGE,
-          ...await this.fetchLabelValues(container, currentImage, availableImage),
+          ...(await this.fetchLabelValues(container, currentImage, availableImage)),
         };
       }
 

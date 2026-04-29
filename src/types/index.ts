@@ -64,6 +64,7 @@ export interface Config {
   globPattern?: string; // For glob policy
   autoUpdate: boolean; // Global auto-update setting
   imageLabelKey?: string; // Image label to display in notifications (e.g. org.opencontainers.image.revision)
+  labelFetchTimeout: number; // Timeout in ms for fetching image label values (default: 30000)
   webhook?: WebhookConfig; // Webhook notifications
   gitops?: GitOpsConfig; // GitOps configuration
   ecr?: ECRConfig; // AWS ECR configuration

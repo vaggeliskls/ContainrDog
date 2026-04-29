@@ -35,6 +35,10 @@ config:
   # e.g. "org.opencontainers.image.revision"
   imageLabel: ""
 
+  # Timeout in seconds for fetching image label values from the registry (default: 30).
+  # Covers the full label fetch operation (manifest + blob fallback).
+  labelFetchTimeout: 30
+
 # ── Kubernetes namespaces ─────────────────────────────────────────────────────
 kubernetes:
   # List of namespaces to monitor. Must exist in the cluster.

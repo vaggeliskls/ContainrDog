@@ -182,6 +182,11 @@ export class KubernetesClient implements IRuntimeClient {
     const patch = {
       spec: {
         template: {
+          metadata: {
+            annotations: {
+              'kubectl.kubernetes.io/restartedAt': new Date().toISOString(),
+            },
+          },
           spec: {
             containers: [{ name: containerName, image: newImageName }],
           },

@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.6.2](https://github.com/vaggeliskls/ContainrDog/compare/0.6.1...0.6.2) (2026-04-27)
+
+
+### Bug Fixes
+
+* patching deployment ([1ab1f4b](https://github.com/vaggeliskls/ContainrDog/commit/1ab1f4ba4765135a3e0f9156ad10daf41ea00a2a))
+
+## [0.6.1](https://github.com/vaggeliskls/ContainrDog/compare/0.6.0...0.6.1) (2026-04-16)
+
+
+### Bug Fixes
+
+* clusterrole add list namespaces ([3a58f95](https://github.com/vaggeliskls/ContainrDog/commit/3a58f95c4d7cbf6757fe198b3f337b60f27ccddb))
+* extra rules from values ([36a6ca4](https://github.com/vaggeliskls/ContainrDog/commit/36a6ca40737e175efa9e9fef59c76a0b95aa12c1))
+
+## [0.6.0](https://github.com/vaggeliskls/ContainrDog/compare/0.5.0...0.6.0) (2026-04-16)
+
+
+### Features
+
+* add kubed cli ([933fe37](https://github.com/vaggeliskls/ContainrDog/commit/933fe37337db32ba6f2f8fa7b3f7d5c9eff477b5))
+
+## [0.5.0](https://github.com/vaggeliskls/ContainrDog/compare/0.4.12...0.5.0) (2026-04-16)
+
+
+### Features
+
+* update node to 24 ([6298c8c](https://github.com/vaggeliskls/ContainrDog/commit/6298c8cc4e8d4ce08cfd2c92632c006696a752e2))
+
+
+### Bug Fixes
+
+* gitops global command ([cd3d666](https://github.com/vaggeliskls/ContainrDog/commit/cd3d66669a69c1f3c467b9cd1e3e520304cf31eb))
+
 ## [0.4.12](https://github.com/vaggeliskls/ContainrDog/compare/0.4.11...0.4.12) (2026-04-15)
 
 

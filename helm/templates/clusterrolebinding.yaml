@@ -13,4 +13,21 @@ roleRef:
   kind: ClusterRole
   name: {{ .Values.rbac.existingClusterRoleName | default (include "containrdog.fullname" .) }}
   apiGroup: rbac.authorization.k8s.io
+{{- if and .Values.rbac.existingClusterRoleName .Values.rbac.extraRules }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "containrdog.fullname" . }}-extra
+  labels:
+    {{- include "containrdog.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "containrdog.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: {{ include "containrdog.fullname" . }}-extra
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
 {{- end }}

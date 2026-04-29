@@ -13,6 +13,7 @@ serviceAccount:
 
 rbac:
   create: true
+  useClusterAdmin: false # bind to the built-in cluster-admin role instead of creating a custom ClusterRole
   extraRules: []
   # - apiGroups: [""]
   #   resources: ["namespaces"]

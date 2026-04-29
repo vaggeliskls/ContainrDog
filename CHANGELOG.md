@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.9](https://github.com/vaggeliskls/ContainrDog/compare/0.6.8...0.6.9) (2026-04-29)
+
+
+### Bug Fixes
+
+* **label:** debug labels of image ([575c044](https://github.com/vaggeliskls/ContainrDog/commit/575c044af2a0c410338bf1f6eea4fca577402aff))
+
 ## [0.6.8](https://github.com/vaggeliskls/ContainrDog/compare/0.6.7...0.6.8) (2026-04-29)
 
 

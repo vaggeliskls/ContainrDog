@@ -11,10 +11,6 @@ subjects:
     namespace: {{ .Release.Namespace }}
 roleRef:
   kind: ClusterRole
-  {{- if .Values.rbac.useClusterAdmin }}
-  name: cluster-admin
-  {{- else }}
-  name: {{ include "containrdog.fullname" . }}
-  {{- end }}
+  name: {{ .Values.rbac.existingClusterRoleName | default (include "containrdog.fullname" .) }}
   apiGroup: rbac.authorization.k8s.io
 {{- end }}

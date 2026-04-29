@@ -13,7 +13,8 @@ serviceAccount:
 
 rbac:
   create: true
-  useClusterAdmin: false # bind to the built-in cluster-admin role instead of creating a custom ClusterRole
+  existingClusterRoleName: "" # if set, bind to this existing ClusterRole instead of creating a custom one (e.g. "admin", "cluster-admin")
+                             # when set, the custom ClusterRole is NOT created even if rbac.create is true — only the ClusterRoleBinding is created
   extraRules: []
   # - apiGroups: [""]
   #   resources: ["namespaces"]

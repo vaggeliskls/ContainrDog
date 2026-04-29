@@ -46,7 +46,8 @@ export class UpdateChecker {
     );
 
     if (labelKey && config.logLevel === 'debug') {
-      await this.fetchLabelValues(container, currentImage, currentImage);
+      const value = await this.registryService.getImageLabelValue(currentImage, labelKey);
+      logger.debug(`Label value for ${container.name} [${labelKey}]: current="${value ?? 'N/A'}"`);
     }
 
     // Force policy: always check digest, even for non-semver tags

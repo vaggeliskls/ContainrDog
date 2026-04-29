@@ -46,8 +46,7 @@ export class UpdateChecker {
     );
 
     if (labelKey && config.logLevel === 'debug') {
-      const value = await this.registryService.getImageLabelValue(currentImage, labelKey);
-      logger.debug(`Label value for ${container.name} [${labelKey}]: current="${value ?? 'N/A'}"`);
+      await this.registryService.getImageLabelValue(currentImage, labelKey);
     }
 
     // Force policy: always check digest, even for non-semver tags
@@ -214,9 +213,6 @@ export class UpdateChecker {
 
     const [currentLabelValue, availableLabelValue] = await Promise.race([fetch, timeout]);
 
-    logger.debug(
-      `Label values for ${container.name} [${labelKey}]: current="${currentLabelValue ?? 'N/A'}", available="${availableLabelValue ?? 'N/A'}"`
-    );
 
     return { imageLabelKey: labelKey, currentLabelValue, availableLabelValue };
   }

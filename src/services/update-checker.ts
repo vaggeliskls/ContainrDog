@@ -45,6 +45,10 @@ export class UpdateChecker {
       `Checking update for ${container.name} (${container.image}) with policy: ${policy}${labelKey ? `, label: ${labelKey}` : ''}`
     );
 
+    if (labelKey && config.logLevel === 'debug') {
+      await this.fetchLabelValues(container, currentImage, currentImage);
+    }
+
     // Force policy: always check digest, even for non-semver tags
     if (policy === UpdatePolicy.FORCE) {
       return await this.checkDigestUpdate(container, currentImage);
@@ -209,11 +213,9 @@ export class UpdateChecker {
 
     const [currentLabelValue, availableLabelValue] = await Promise.race([fetch, timeout]);
 
-    if (currentLabelValue === undefined && availableLabelValue === undefined) {
-      logger.debug(
-        `Label fetch timed out or failed for ${container.name}, continuing without label values`
-      );
-    }
+    logger.debug(
+      `Label values for ${container.name} [${labelKey}]: current="${currentLabelValue ?? 'N/A'}", available="${availableLabelValue ?? 'N/A'}"`
+    );
 
     return { imageLabelKey: labelKey, currentLabelValue, availableLabelValue };
   }

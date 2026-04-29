@@ -44,6 +44,12 @@ export class UpdateChecker {
       `Checking update for ${container.name} (${container.image}) with policy: ${policy}`
     );
 
+    const labelKey = container.imageLabelKey || config.imageLabelKey;
+    if (labelKey) {
+      const labelValue = await this.registryService.getImageLabelValue(currentImage, labelKey);
+      logger.debug(`  🏷️  ${container.name} image label (${labelKey}): ${labelValue ?? 'not found'}`);
+    }
+
     // Force policy: always check digest, even for non-semver tags
     if (policy === UpdatePolicy.FORCE) {
       return await this.checkDigestUpdate(container, currentImage);

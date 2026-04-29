@@ -214,7 +214,13 @@ export class RegistryService {
       const labels: Record<string, string> | undefined =
         blobResp.data?.config?.Labels ?? blobResp.data?.container_config?.Labels;
 
-      return labels?.[labelKey];
+      const value = labels?.[labelKey];
+      if (value) {
+        logger.debug(`🏷️  Label '${labelKey}' found for ${imageInfo.repository}:${imageInfo.tag} = ${value}`);
+      } else {
+        logger.debug(`🏷️  Label '${labelKey}' not found for ${imageInfo.repository}:${imageInfo.tag}`);
+      }
+      return value;
     } catch (error) {
       logger.warn(`⚠️  Failed to get label '${labelKey}' for ${imageInfo.repository}:${imageInfo.tag}: ${error}`);
       return undefined;

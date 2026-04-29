@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.3](https://github.com/vaggeliskls/ContainrDog/compare/0.6.2...0.6.3) (2026-04-29)
+
+
+### Bug Fixes
+
+* **helm:** make use of cluster admin ([282ef01](https://github.com/vaggeliskls/ContainrDog/commit/282ef011f701780b5d7dd53355b0d43c6bf0fcaf))
+* **imageLabel:** add debug messages ([edeaadc](https://github.com/vaggeliskls/ContainrDog/commit/edeaadc738a0ac254ac09f21d5cb0eb1295fb49c))
+
 ## [0.6.2](https://github.com/vaggeliskls/ContainrDog/compare/0.6.1...0.6.2) (2026-04-27)
 
 

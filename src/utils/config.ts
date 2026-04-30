@@ -415,9 +415,9 @@ export class ConfigManager {
     // Quiet mode (default: false - show all output)
     const quietMode = process.env.GITOPS_QUIET_MODE === 'true';
 
-    // Unique clone path: prefix per-workload clones with the workload name
-    // to isolate when multiple workloads share the same repo (default: false).
-    const uniqueClonePath = process.env.GITOPS_UNIQUE_CLONE_PATH === 'true';
+    // Unique clone path: isolate per-workload clones by namespace/workload/repo/branch
+    // so workloads sharing a repo don't collide. Default: true. Set to 'false' to opt out.
+    const uniqueClonePath = process.env.GITOPS_UNIQUE_CLONE_PATH !== 'false';
 
     return {
       enabled,

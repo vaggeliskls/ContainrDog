@@ -79,11 +79,13 @@ gitops:
   commands: [] # e.g. ["kubectl apply -f $GITOPS_CLONE_PATH/k8s/"]
   clonePath: "" # parent directory for clones; each repo lands at <clonePath>/<repo-name>. Default parent: /tmp.
   quietMode: false
-  # When true, isolate each per-workload clone by namespace, workload name,
-  # repo, and branch so workloads sharing a repo (or the same workload on
-  # different branches) don't collide:
+  # Isolate each per-workload clone by namespace, workload name, repo, and
+  # branch so workloads sharing a repo (or the same workload on different
+  # branches) don't collide:
   #   <clonePath>/<namespace>-<workload>-<repo>-<branch>
-  uniqueClonePath: false
+  # Set to false to share a single working tree across workloads of the same
+  # repo (saves disk but races on concurrent fetch/pull and command exec).
+  uniqueClonePath: true
 
 # ── Registry credentials ──────────────────────────────────────────────────────
 registry:

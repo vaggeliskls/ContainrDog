@@ -121,10 +121,17 @@ export class WebhookService {
       },
     ];
 
-    if (update.imageLabelKey) {
-      const labelName = this.labelDisplayName(update.imageLabelKey);
-      if (update.currentLabelValue) fields.push({ title: `Current ${labelName}`, value: update.currentLabelValue, short: true });
-      if (update.availableLabelValue) fields.push({ title: `New ${labelName}`, value: update.availableLabelValue, short: true });
+    if (update.imageLabelKeys && update.availableLabelValues) {
+      for (const key of update.imageLabelKeys) {
+        const value = update.availableLabelValues[key];
+        if (value) {
+          fields.push({
+            title: this.labelDisplayName(key),
+            value,
+            short: true,
+          });
+        }
+      }
     }
 
     if (error) {
@@ -178,10 +185,17 @@ export class WebhookService {
       },
     ];
 
-    if (update.imageLabelKey) {
-      const labelName = this.labelDisplayName(update.imageLabelKey);
-      if (update.currentLabelValue) fields.push({ name: `Current ${labelName}`, value: update.currentLabelValue, inline: true });
-      if (update.availableLabelValue) fields.push({ name: `New ${labelName}`, value: update.availableLabelValue, inline: true });
+    if (update.imageLabelKeys && update.availableLabelValues) {
+      for (const key of update.imageLabelKeys) {
+        const value = update.availableLabelValues[key];
+        if (value) {
+          fields.push({
+            name: this.labelDisplayName(key),
+            value,
+            inline: true,
+          });
+        }
+      }
     }
 
     if (error) {
@@ -233,10 +247,16 @@ export class WebhookService {
       },
     ];
 
-    if (update.imageLabelKey) {
-      const labelName = this.labelDisplayName(update.imageLabelKey);
-      if (update.currentLabelValue) facts.push({ name: `Current ${labelName}`, value: update.currentLabelValue });
-      if (update.availableLabelValue) facts.push({ name: `New ${labelName}`, value: update.availableLabelValue });
+    if (update.imageLabelKeys && update.availableLabelValues) {
+      for (const key of update.imageLabelKeys) {
+        const value = update.availableLabelValues[key];
+        if (value) {
+          facts.push({
+            name: this.labelDisplayName(key),
+            value,
+          });
+        }
+      }
     }
 
     if (error) {
@@ -281,12 +301,11 @@ export class WebhookService {
         currentTag: update.currentImage.tag,
         newTag: update.availableImage.tag,
         updateType: update.updateType,
-        ...(update.imageLabelKey && {
-          label: {
-            key: update.imageLabelKey,
-            currentValue: update.currentLabelValue ?? null,
-            newValue: update.availableLabelValue ?? null,
-          },
+        ...(update.imageLabelKeys && update.imageLabelKeys.length > 0 && {
+          labels: update.imageLabelKeys.map((key) => ({
+            key,
+            value: update.availableLabelValues?.[key] ?? null,
+          })),
         }),
       },
       error: error || null,

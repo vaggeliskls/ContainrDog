@@ -40,14 +40,10 @@ export class UpdateChecker {
     const policy = container.policy || config.policy;
     const globPattern = container.globPattern || config.globPattern;
 
-    const labelKey = container.imageLabelKey || config.imageLabelKey;
+    const labelKeys = container.imageLabelKeys ?? config.imageLabelKeys ?? [];
     logger.debug(
-      `Checking update for ${container.name} (${container.image}) with policy: ${policy}${labelKey ? `, label: ${labelKey}` : ''}`
+      `Checking update for ${container.name} (${container.image}) with policy: ${policy}${labelKeys.length > 0 ? `, labels: ${labelKeys.join(',')}` : ''}`
     );
-
-    if (labelKey && config.logLevel === 'debug') {
-      await this.registryService.getImageLabelValue(currentImage, labelKey);
-    }
 
     // Force policy: always check digest, even for non-semver tags
     if (policy === UpdatePolicy.FORCE) {
@@ -125,7 +121,7 @@ export class UpdateChecker {
           currentImage,
           availableImage,
           updateType: UpdateType.SEMANTIC_VERSION,
-          ...(await this.fetchLabelValues(container, currentImage, availableImage)),
+          ...(await this.fetchLabelValues(container, availableImage)),
         };
       }
 
@@ -193,28 +189,36 @@ export class UpdateChecker {
 
   private async fetchLabelValues(
     container: ContainerInfo,
-    currentImage: ImageInfo,
     availableImage: ImageInfo
-  ): Promise<{ imageLabelKey?: string; currentLabelValue?: string; availableLabelValue?: string }> {
+  ): Promise<{
+    imageLabelKeys?: string[];
+    availableLabelValues?: Record<string, string>;
+  }> {
     const config = getConfig();
-    const labelKey = container.imageLabelKey || config.imageLabelKey;
-    if (!labelKey) return {};
+    const labelKeys = container.imageLabelKeys ?? config.imageLabelKeys ?? [];
+    if (labelKeys.length === 0) return {};
 
     const LABEL_FETCH_TIMEOUT_MS = config.labelFetchTimeout ?? 30_000;
 
-    const timeout = new Promise<[undefined, undefined]>((resolve) =>
-      setTimeout(() => resolve([undefined, undefined]), LABEL_FETCH_TIMEOUT_MS)
+    const timeout = new Promise<Array<string | undefined>>((resolve) =>
+      setTimeout(() => resolve(labelKeys.map(() => undefined)), LABEL_FETCH_TIMEOUT_MS)
     );
 
-    const fetch = Promise.all([
-      this.registryService.getImageLabelValue(currentImage, labelKey),
-      this.registryService.getImageLabelValue(availableImage, labelKey),
+    const fetched = await Promise.race([
+      Promise.all(labelKeys.map((key) => this.registryService.getImageLabelValue(availableImage, key))),
+      timeout,
     ]);
 
-    const [currentLabelValue, availableLabelValue] = await Promise.race([fetch, timeout]);
+    const availableLabelValues: Record<string, string> = {};
+    labelKeys.forEach((key, i) => {
+      const value = fetched[i];
+      if (value) availableLabelValues[key] = value;
+    });
 
-
-    return { imageLabelKey: labelKey, currentLabelValue, availableLabelValue };
+    return {
+      imageLabelKeys: labelKeys,
+      availableLabelValues: Object.keys(availableLabelValues).length > 0 ? availableLabelValues : undefined,
+    };
   }
 
   private matchesGlob(tag: string, pattern: string): boolean {
@@ -258,7 +262,7 @@ export class UpdateChecker {
           currentImage,
           availableImage,
           updateType: UpdateType.DIGEST_CHANGE,
-          ...(await this.fetchLabelValues(container, currentImage, availableImage)),
+          ...(await this.fetchLabelValues(container, availableImage)),
         };
       }
 

@@ -15,20 +15,20 @@ environment:
   - WEBHOOK_NOTIFY_GITOPS=true     # notify when GitOps commands execute (default: true)
 ```
 
-## Image Label in Notifications
+## Image Labels in Notifications
 
-Optionally display an image label (e.g. commit hash) alongside version info in notifications:
+Optionally display one or more image labels (e.g. commit hash, version) alongside version info in notifications. Pass a JSON array:
 
 ```yaml
 environment:
-  - IMAGE_LABEL=org.opencontainers.image.revision
+  - IMAGE_LABEL=["org.opencontainers.image.revision","org.opencontainers.image.version"]
 ```
 
-The label value is fetched from the registry for both the current and new image and shown as extra fields. If the label is not present on an image it is silently omitted — no errors, no empty fields.
+Each label is fetched from the registry for the new image and shown as a separate field. Labels not present on the image are silently omitted — no errors, no empty fields.
 
-Per-container override (Docker label / Kubernetes annotation):
+Per-container override (Docker label / Kubernetes annotation, JSON array):
 ```
-containrdog.image-label=org.opencontainers.image.revision
+containrdog.image-label=["org.opencontainers.image.revision","org.opencontainers.image.version"]
 ```
 
 > **Note:** The label must be set by the image builder. Images built with GitHub Actions and `docker/metadata-action` include it automatically. Third-party images (nginx, postgres, etc.) typically do not.
@@ -69,17 +69,16 @@ containrdog.image-label=org.opencontainers.image.revision
     "currentTag": "1.25",
     "newTag": "1.26",
     "updateType": "semantic_version",
-    "label": {
-      "key": "org.opencontainers.image.revision",
-      "currentValue": "abc1234",
-      "newValue": "def5678"
-    }
+    "labels": [
+      { "key": "org.opencontainers.image.revision", "value": "def5678" },
+      { "key": "org.opencontainers.image.version", "value": "1.26.0" }
+    ]
   },
   "error": null
 }
 ```
 
-The `label` field is only present when `IMAGE_LABEL` is configured. `currentValue`/`newValue` are `null` if the label is not found on that image.
+The `labels` array is only present when `IMAGE_LABEL` is configured. Each entry's `value` is `null` if that label is not found on the new image.
 
 **GitOps deploy** payload sent (when `WEBHOOK_NOTIFY_GITOPS=true`):
 ```json

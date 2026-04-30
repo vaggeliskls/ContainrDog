@@ -13,7 +13,7 @@ All configuration is via environment variables.
 | `POLICY` | `major` | Update policy (see [Update Policies](update-policies.md)) |
 | `AUTO_UPDATE` | `true` | Auto-pull and recreate on update |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
-| `IMAGE_LABEL` | — | Image label key to display in notifications (e.g. `org.opencontainers.image.revision`). Fetched from the registry for both old and new image. Silently omitted if not present. |
+| `IMAGE_LABEL` | — | JSON array of image label keys to display in notifications (e.g. `["org.opencontainers.image.revision","org.opencontainers.image.version"]`). Each key is fetched from the registry; only labels found on the new image are included in chat notifications. |
 
 ## Docker / Podman
 

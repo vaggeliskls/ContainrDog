@@ -62,7 +62,7 @@ spec:
             {{- end }}
             {{- if .Values.config.imageLabel }}
             - name: IMAGE_LABEL
-              value: {{ .Values.config.imageLabel | quote }}
+              value: {{ toJson .Values.config.imageLabel | quote }}
             {{- end }}
             {{- if .Values.config.labelFetchTimeout }}
             - name: LABEL_FETCH_TIMEOUT

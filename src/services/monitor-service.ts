@@ -99,7 +99,7 @@ export class MonitorService {
           this.lastMonitoredContainerIds = containerIds;
           logger.info(`🔍 Monitoring ${containers.length} container(s):`);
           for (const container of containers) {
-            const labelHint = container.imageLabelKey ? ` [label: ${container.imageLabelKey}]` : '';
+            const labelHint = container.imageLabelKeys?.length ? ` [labels: ${container.imageLabelKeys.join(', ')}]` : '';
             logger.info(`   📦 ${container.name} (${container.image})${labelHint}`);
           }
         }

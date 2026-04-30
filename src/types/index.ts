@@ -63,7 +63,7 @@ export interface Config {
   policy: UpdatePolicy;
   globPattern?: string; // For glob policy
   autoUpdate: boolean; // Global auto-update setting
-  imageLabelKey?: string; // Image label to display in notifications (e.g. org.opencontainers.image.revision)
+  imageLabelKeys?: string[]; // Image label keys to display in notifications (e.g. org.opencontainers.image.revision). Comma-separated in IMAGE_LABEL.
   labelFetchTimeout: number; // Timeout in ms for fetching image label values (default: 30000)
   webhook?: WebhookConfig; // Webhook notifications
   gitops?: GitOpsConfig; // GitOps configuration
@@ -102,7 +102,7 @@ export interface ContainerInfo {
   policy?: UpdatePolicy;
   globPattern?: string;
   autoUpdate?: boolean;
-  imageLabelKey?: string;
+  imageLabelKeys?: string[];
   updateCommands?: string[]; // Deprecated: use preUpdateCommands and postUpdateCommands
   preUpdateCommands?: string[]; // Commands to run before update
   postUpdateCommands?: string[]; // Commands to run after update
@@ -136,9 +136,8 @@ export interface ImageUpdateInfo {
   currentImage: ImageInfo;
   availableImage: ImageInfo;
   updateType: UpdateType;
-  imageLabelKey?: string;
-  currentLabelValue?: string;
-  availableLabelValue?: string;
+  imageLabelKeys?: string[];
+  availableLabelValues?: Record<string, string>;
 }
 
 export enum UpdateType {

@@ -1,6 +1,6 @@
 import { Config, RegistryCredentials, UpdatePolicy, WebhookConfig, WebhookProvider, GitOpsConfig, GitAuthType, ECRConfig, ContainerRuntime, KubernetesConfig } from '../types';
 import { readFileSync, existsSync } from 'fs';
-import { extractRepoName } from './label-parser';
+import { extractRepoName, parseJSONLabel } from './label-parser';
 
 export class ConfigManager {
   private static instance: ConfigManager;
@@ -52,8 +52,8 @@ export class ConfigManager {
     // Auto-update (default: true)
     const autoUpdate = process.env.AUTO_UPDATE !== 'false';
 
-    // Image label to display in notifications (optional)
-    const imageLabelKey = process.env.IMAGE_LABEL || undefined;
+    // Image labels to display in notifications (optional, JSON array — e.g. '["a","b"]')
+    const imageLabelKeys = parseJSONLabel(process.env.IMAGE_LABEL);
 
     // Timeout for fetching image label values (default: 30s)
     const labelFetchTimeout = process.env.LABEL_FETCH_TIMEOUT
@@ -89,7 +89,7 @@ export class ConfigManager {
       policy,
       globPattern,
       autoUpdate,
-      imageLabelKey,
+      imageLabelKeys,
       labelFetchTimeout,
       webhook,
       gitops,

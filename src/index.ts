@@ -125,7 +125,7 @@ class ContainerUpdater {
       logger.info(`  🔐 AWS ECR: enabled (region: ${this.config.ecr.region})`);
     }
     logger.info(`  💻 Update commands: ${this.config.updateCommands?.length || 0} configured`);
-    logger.info(`  🏷️  Image label: ${this.config.imageLabelKey || 'not set'} (fetch timeout: ${this.config.labelFetchTimeout / 1000}s)`);
+    logger.info(`  🏷️  Image labels: ${this.config.imageLabelKeys?.join(', ') || 'not set'} (fetch timeout: ${this.config.labelFetchTimeout / 1000}s)`);
     logger.info(`  📝 Log level: ${this.config.logLevel}`);
   }
 

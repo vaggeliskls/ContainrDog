@@ -129,7 +129,7 @@ export class KubernetesClient implements IRuntimeClient {
             policy: parsePolicyFromLabel(allLabels['containrdog.policy']),
             globPattern: allLabels['containrdog.glob-pattern'],
             autoUpdate: parseAutoUpdateLabel(allLabels['containrdog.auto-update']),
-            imageLabelKey: allLabels['containrdog.image-label'] || undefined,
+            imageLabelKeys: parseJSONLabel(allLabels['containrdog.image-label']),
             updateCommands: parseJSONLabel(allLabels['containrdog.update-commands']),
             preUpdateCommands: parseJSONLabel(allLabels['containrdog.pre-update-commands']),
             postUpdateCommands: parseJSONLabel(allLabels['containrdog.post-update-commands']),

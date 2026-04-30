@@ -41,7 +41,7 @@ export class DockerClient implements IRuntimeClient {
           policy: parsePolicyFromLabel(labels['containrdog.policy']),
           globPattern: labels['containrdog.glob-pattern'],
           autoUpdate: parseAutoUpdateLabel(labels['containrdog.auto-update']),
-          imageLabelKey: labels['containrdog.image-label'] || undefined,
+          imageLabelKeys: parseJSONLabel(labels['containrdog.image-label']),
           updateCommands: parseJSONLabel(labels['containrdog.update-commands']),
           preUpdateCommands: parseJSONLabel(labels['containrdog.pre-update-commands']),
           postUpdateCommands: parseJSONLabel(labels['containrdog.post-update-commands']),

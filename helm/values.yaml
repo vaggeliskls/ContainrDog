@@ -13,8 +13,9 @@ serviceAccount:
 
 rbac:
   create: true
-  existingClusterRoleName: "" # if set, bind to this existing ClusterRole instead of creating a custom one (e.g. "admin", "cluster-admin")
-                             # when set, the custom ClusterRole is NOT created even if rbac.create is true — only the ClusterRoleBinding is created
+  # if set, bind to this existing ClusterRole instead of creating a custom one (e.g. "admin", "cluster-admin")
+  # when set, the custom ClusterRole is NOT created even if rbac.create is true — only the ClusterRoleBinding is created
+  existingClusterRoleName: ""
   extraRules: []
   # - apiGroups: [""]
   #   resources: ["namespaces"]
@@ -29,11 +30,13 @@ config:
   autoUpdate: true
   labeled: true # only monitor annotated workloads
   label: "containrdog-enabled"
-  # Image label to display in update notifications (optional).
-  # Fetched from the registry for both current and new image.
-  # Silently omitted if the label is not present on the image.
-  # e.g. "org.opencontainers.image.revision"
-  imageLabel: ""
+  # Image labels to display in update notifications (optional).
+  # Each label is fetched from the registry for the new image.
+  # Silently omitted if a label is not present on the image. e.g.
+  #   imageLabel:
+  #     - org.opencontainers.image.revision
+  #     - org.opencontainers.image.version
+  imageLabel: []
 
   # Timeout in seconds for fetching image label values from the registry (default: 30).
   # Covers the full label fetch operation (manifest + blob fallback).

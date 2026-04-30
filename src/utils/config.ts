@@ -415,10 +415,6 @@ export class ConfigManager {
     // Quiet mode (default: false - show all output)
     const quietMode = process.env.GITOPS_QUIET_MODE === 'true';
 
-    // Unique clone path: isolate per-workload clones by namespace/workload/repo/branch
-    // so workloads sharing a repo don't collide. Default: true. Set to 'false' to opt out.
-    const uniqueClonePath = process.env.GITOPS_UNIQUE_CLONE_PATH !== 'false';
-
     // Shallow clone: pass --depth 1 to skip repo history. Saves disk for large
     // repos; the latest files are still present. Default: false.
     const shallow = process.env.GITOPS_SHALLOW === 'true';
@@ -435,7 +431,6 @@ export class ConfigManager {
       commands,
       clonePath,
       quietMode,
-      uniqueClonePath,
       shallow,
     };
   }

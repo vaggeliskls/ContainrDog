@@ -45,9 +45,8 @@ export interface GitOpsConfig {
   pollInterval: number; // in milliseconds
   watchPaths?: string[]; // Glob patterns for files/folders to watch
   commands?: string[]; // Commands to execute on changes
-  clonePath: string; // Parent directory; repos clone into <clonePath>/<repoName>
+  clonePath: string; // Parent directory; per-container repos clone into <clonePath>/<namespace>-<repo>-<branch> (or <repo>-<branch> on Docker)
   quietMode?: boolean; // Only show errors from commands (default: false)
-  uniqueClonePath?: boolean; // Prefix per-workload clones with the workload name to avoid collisions when multiple workloads share a repo
   shallow?: boolean; // Clone with --depth 1 to skip history (default: false). Saves disk for large repos; latest files still present.
 }
 

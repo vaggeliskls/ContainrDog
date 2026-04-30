@@ -77,15 +77,14 @@ gitops:
   pollInterval: "60s"
   watchPaths: [] # e.g. ["docker-compose.yml", "config/**"]
   commands: [] # e.g. ["kubectl apply -f $GITOPS_CLONE_PATH/k8s/"]
-  clonePath: "" # parent directory for clones; each repo lands at <clonePath>/<repo-name>. Default parent: /tmp.
+  # Parent directory for per-container clones. Workloads pointing at the same
+  # <namespace, repo, branch> share a single working tree (one fetch, one pull,
+  # but each workload runs its own commands). Path layout:
+  #   K8s:    <clonePath>/<namespace>-<repo-name>-<branch>
+  #   Docker: <clonePath>/<repo-name>-<branch>
+  # Default parent: /tmp.
+  clonePath: ""
   quietMode: false
-  # Isolate each per-workload clone by namespace, workload name, repo, and
-  # branch so workloads sharing a repo (or the same workload on different
-  # branches) don't collide:
-  #   <clonePath>/<namespace>-<workload>-<repo>-<branch>
-  # Set to false to share a single working tree across workloads of the same
-  # repo (saves disk but races on concurrent fetch/pull and command exec).
-  uniqueClonePath: true
   # Clone with --depth 1 to skip repo history. Latest files are still present
   # on disk; commands that read repo files work as before. Recommended for
   # large repos (monorepos, repos with binary assets). Default: false.

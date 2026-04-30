@@ -12,6 +12,24 @@ import { ImageUpdateInfo, GitChangeInfo, ContainerInfo, RegistryCredentials, Git
 import { ImageParser } from '../utils/image-parser';
 import { minimatch } from 'minimatch';
 
+interface SubscriberState {
+  containerId: string;
+  lastCommit: string | null;
+  lastCheck: number;
+}
+
+interface SharedRepoState {
+  service: GitService;
+  subscribers: Map<string, SubscriberState>; // keyed by container.id
+  // Promise-chain mutex: serialize fetch/pull/diff so concurrent subscribers
+  // don't race on .git lock files.
+  opQueue: Promise<unknown>;
+  // Auth in effect for this state (taken from the first registrant). Used to
+  // warn when later subscribers arrive with divergent credentials — they'll
+  // silently be served by the first registrant's auth.
+  auth: { authType: GitAuthType; token?: string; sshKeyPath?: string };
+}
+
 export class MonitorService {
   private runtimeClient: IRuntimeClient;
   private registryService: RegistryService;
@@ -19,7 +37,11 @@ export class MonitorService {
   private commandExecutor: CommandExecutor;
   private webhookService?: WebhookService;
   private gitService?: GitService; // Global GitOps service
-  private containerGitServices: Map<string, { service: GitService; lastCheck: number }> = new Map(); // Per-container GitOps services
+  // Shared per-container GitOps services. Workloads pointing at the same
+  // <namespace, repo, branch> converge on the same key (the clone path), so
+  // one working tree serves all of them. Each subscriber tracks its own
+  // lastCommit and runs its own commands.
+  private sharedRepoStates: Map<string, SharedRepoState> = new Map();
   private lastGitopsCheck: number = 0;
   private gitopsExecuting: Set<string> = new Set(); // Track executing GitOps operations
   private globalGitopsExecuting: boolean = false; // Track global GitOps execution
@@ -278,39 +300,44 @@ export class MonitorService {
       }
     }
 
-    // Cleanup GitOps services for containers that no longer exist
+    // Cleanup GitOps subscribers for containers that no longer exist. When a
+    // shared repo state has no subscribers left, drop the state entry too
+    // (the working tree on disk stays — disposing it is intentionally manual).
     const containerIds = new Set(containers.map((c) => c.id));
-    for (const [id] of this.containerGitServices) {
-      if (!containerIds.has(id)) {
-        this.containerGitServices.delete(id);
-        logger.debug(`🧹 Cleaned up GitOps service for removed container: ${id}`);
+    for (const [clonePath, state] of this.sharedRepoStates) {
+      for (const [id] of state.subscribers) {
+        if (!containerIds.has(id)) {
+          state.subscribers.delete(id);
+          logger.debug(`🧹 GitOps: Removed subscriber ${id} from ${clonePath}`);
+        }
+      }
+      if (state.subscribers.size === 0) {
+        this.sharedRepoStates.delete(clonePath);
+        logger.debug(`🧹 GitOps: Released shared repo state at ${clonePath}`);
       }
     }
   }
 
   /**
-   * Build the clone path for a container's repo. When uniqueClonePath is set,
-   * the workload's name (sanitized) is prefixed onto the repo dir so that
-   * multiple workloads sharing the same repo get isolated working trees.
+   * Build the shared clone path for a container's repo. Workloads that target
+   * the same repo+branch in the same namespace converge on the same path and
+   * therefore share a single working tree. Each subscriber still tracks its
+   * own lastCommit and runs its own commands (see SharedRepoState).
+   *
+   * Format:
+   *   K8s:    <parent>/<namespace>-<repo>-<branch>
+   *   Docker: <parent>/<repo>-<branch>
    */
   private resolveContainerClonePath(container: ContainerInfo, gitopsConfig?: GitOpsConfig): string {
     const cloneParent =
       (container.gitopsClonePath || gitopsConfig?.clonePath || '/tmp').replace(/\/+$/, '');
     const repoName = extractRepoName(container.gitopsRepoUrl!);
-    if (gitopsConfig?.uniqueClonePath) {
-      // Use the workload name on Kubernetes (Deployment/StatefulSet/DaemonSet),
-      // not the per-pod container spec — replicas of the same workload share a
-      // path. Fall back to container.name for Docker. Include namespace and
-      // branch so cross-namespace and cross-branch reuse stays isolated.
-      const workloadId = container.workloadName || container.name;
-      const identifier = container.namespace
-        ? `${container.namespace}-${workloadId}`
-        : workloadId;
-      const branch = container.gitopsBranch || gitopsConfig?.branch || 'main';
-      const slug = `${identifier}-${repoName}-${branch}`.replace(/[^a-zA-Z0-9._-]/g, '-');
-      return `${cloneParent}/${slug}`;
-    }
-    return `${cloneParent}/${repoName}`;
+    const branch = container.gitopsBranch || gitopsConfig?.branch || 'main';
+    const parts = container.namespace
+      ? [container.namespace, repoName, branch]
+      : [repoName, branch];
+    const slug = parts.join('-').replace(/[^a-zA-Z0-9._-]/g, '-');
+    return `${cloneParent}/${slug}`;
   }
 
   /**
@@ -319,78 +346,158 @@ export class MonitorService {
   private async checkContainerGitOps(container: ContainerInfo, now: number): Promise<void> {
     try {
       const config = getConfig();
+      const clonePath = this.resolveContainerClonePath(container, config.gitops);
 
-      let gitServiceData = this.containerGitServices.get(container.id);
+      // 1. Get or create the SharedRepoState for this clone path. A path is
+      //    derived from <namespace, repo, branch>, so workloads sharing those
+      //    values converge on the same state and reuse one working tree.
+      const subscriberAuth = {
+        authType: container.gitopsAuthType || config.gitops?.authType || GitAuthType.NONE,
+        token: container.gitopsToken || config.gitops?.token,
+        sshKeyPath: container.gitopsSshKeyPath || config.gitops?.sshKeyPath,
+      };
 
-      if (!gitServiceData) {
-        const clonePath = this.resolveContainerClonePath(container, config.gitops);
-
-        const gitConfig = {
+      let state = this.sharedRepoStates.get(clonePath);
+      if (!state) {
+        const gitConfig: GitOpsConfig = {
           enabled: true,
           repoUrl: container.gitopsRepoUrl!,
           branch: container.gitopsBranch || 'main',
-          authType: container.gitopsAuthType || config.gitops?.authType || GitAuthType.NONE,
-          token: container.gitopsToken || config.gitops?.token,
-          sshKeyPath: container.gitopsSshKeyPath || config.gitops?.sshKeyPath,
+          authType: subscriberAuth.authType,
+          token: subscriberAuth.token,
+          sshKeyPath: subscriberAuth.sshKeyPath,
           pollInterval: container.gitopsPollInterval || 60000,
-          watchPaths: container.gitopsWatchPaths,
-          commands: container.gitopsCommands,
+          // watchPaths/commands live per-subscriber, not on the shared service.
           clonePath,
           shallow: config.gitops?.shallow,
         };
 
-        const gitService = new GitService(gitConfig);
-        const initialized = await gitService.initialize();
-
+        const service = new GitService(gitConfig);
+        const initialized = await service.initialize();
         if (!initialized) {
-          logger.warn(`⚠️  Failed to initialize GitOps for container ${container.name}`);
+          logger.warn(`⚠️  GitOps: Failed to initialize shared repo at ${clonePath} (driven by ${container.name})`);
           return;
         }
 
-        gitServiceData = { service: gitService, lastCheck: 0 };
-        this.containerGitServices.set(container.id, gitServiceData);
-        logger.info(`📦 GitOps: Initialized repository for ${container.name}`);
+        state = { service, subscribers: new Map(), opQueue: Promise.resolve(), auth: subscriberAuth };
+        this.sharedRepoStates.set(clonePath, state);
+        logger.info(`📦 GitOps: Initialized shared repo at ${clonePath}`);
       }
 
-      const pollInterval = container.gitopsPollInterval || 60000;
-      if (now - gitServiceData.lastCheck < pollInterval) {
-        return;
+      // 2. Register this container's subscription. New subscribers start at
+      //    the current HEAD so they don't replay history.
+      let sub = state.subscribers.get(container.id);
+      if (!sub) {
+        // Warn if the new subscriber's credentials differ from the in-effect
+        // ones; the first registrant's auth is what's actually used for fetches.
+        if (
+          state.auth.authType !== subscriberAuth.authType ||
+          state.auth.token !== subscriberAuth.token ||
+          state.auth.sshKeyPath !== subscriberAuth.sshKeyPath
+        ) {
+          logger.warn(
+            `⚠️  GitOps: ${container.name} joined shared repo ${clonePath} with different credentials; ` +
+            `the first registrant's auth (${state.auth.authType}) remains in effect for all fetches.`
+          );
+        }
+        const head = await state.service.getCurrentCommit();
+        sub = { containerId: container.id, lastCommit: head, lastCheck: 0 };
+        state.subscribers.set(container.id, sub);
+        logger.info(`📦 GitOps: ${container.name} subscribed to ${clonePath}`);
       }
+
+      // 3. Per-subscriber poll cadence and re-entrancy guard.
+      const pollInterval = container.gitopsPollInterval || 60000;
+      if (now - sub.lastCheck < pollInterval) return;
 
       if (this.gitopsExecuting.has(container.id)) {
         logger.warn(`⚠️  GitOps (${container.name}): Previous execution still running, skipping this interval`);
         return;
       }
 
-      gitServiceData.lastCheck = now;
+      sub.lastCheck = now;
       this.gitopsExecuting.add(container.id);
 
       try {
-        if (gitServiceData.service.shouldRunOnInterval()) {
-          logger.info(`📦 GitOps (${container.name}): Running interval-based commands (no watch paths)`);
-
-          const intervalChange: GitChangeInfo = {
-            changedFiles: [],
-            previousCommit: '',
-            currentCommit: '',
-            commitMessage: 'Interval-based execution',
-            timestamp: new Date(),
-          };
-          await this.executeGitOpsCommands(container, intervalChange);
-        } else {
-          const changes = await gitServiceData.service.checkForChanges();
-
-          if (changes) {
-            logger.info(`📦 GitOps (${container.name}): Changes detected in repository`);
-            await this.executeGitOpsCommands(container, changes);
-          }
-        }
+        await this.runSharedCheckForSubscriber(state, sub, container);
       } finally {
         this.gitopsExecuting.delete(container.id);
       }
     } catch (error) {
       logger.error(`❌ GitOps check failed for container ${container.name}:`, error);
     }
+  }
+
+  /**
+   * Run a check for a single subscriber against the shared repo state.
+   * Serialized via the state's promise-chain mutex so a concurrent subscriber
+   * can't race on .git lock files. Each subscriber tracks its own lastCommit
+   * and runs its own commands; fetch/pull are still per-subscriber here for
+   * simplicity (no shared "last fetch" timestamp yet — git's own object dedup
+   * keeps the network cost low when nothing has changed).
+   */
+  private async runSharedCheckForSubscriber(
+    state: SharedRepoState,
+    sub: SubscriberState,
+    container: ContainerInfo
+  ): Promise<void> {
+    const op = state.opQueue.then(async () => {
+      const watchPaths = container.gitopsWatchPaths;
+      const isInterval = !watchPaths || watchPaths.length === 0;
+
+      // No watchPaths: fire commands every poll, regardless of git state.
+      if (isInterval) {
+        logger.info(`📦 GitOps (${container.name}): Running interval-based commands (no watch paths)`);
+        const change: GitChangeInfo = {
+          changedFiles: [],
+          previousCommit: '',
+          currentCommit: '',
+          commitMessage: 'Interval-based execution',
+          timestamp: new Date(),
+        };
+        await this.executeGitOpsCommands(container, change);
+        return;
+      }
+
+      // watchPaths set: only fire on real commits that touch matching files.
+      await state.service.fetch();
+      const currentHead = await state.service.getRemoteHead();
+      if (!currentHead) {
+        logger.warn(`⚠️  GitOps (${container.name}): Could not determine remote HEAD`);
+        return;
+      }
+
+      if (sub.lastCommit && sub.lastCommit === currentHead) return; // no new commits for this subscriber
+
+      const previousCommit = sub.lastCommit || `${currentHead}~1`;
+      const changedFiles = await state.service.getDiff(previousCommit, currentHead);
+      const relevantFiles = state.service.filterByWatchPaths(changedFiles, watchPaths);
+
+      if (relevantFiles.length === 0) {
+        sub.lastCommit = currentHead; // advance so we don't keep re-checking the same commit
+        return;
+      }
+
+      // Pull working tree to HEAD so the subscriber's commands see latest files.
+      // Idempotent if another subscriber already pulled this cycle.
+      await state.service.pull();
+
+      const commitMessage = await state.service.getCommitMessage(currentHead);
+      const change: GitChangeInfo = {
+        changedFiles: relevantFiles,
+        previousCommit,
+        currentCommit: currentHead,
+        commitMessage,
+        timestamp: new Date(),
+      };
+      sub.lastCommit = currentHead;
+
+      logger.info(`📦 GitOps (${container.name}): ${relevantFiles.length} relevant file(s) changed @ ${currentHead.substring(0, 7)}`);
+      await this.executeGitOpsCommands(container, change);
+    });
+
+    state.opQueue = op.catch(() => undefined); // keep the chain alive after errors
+    await op;
   }
 
   /**

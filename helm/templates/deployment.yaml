@@ -128,8 +128,6 @@ spec:
             - name: GITOPS_CLONE_PATH
               value: {{ .Values.gitops.clonePath | quote }}
             {{- end }}
-            - name: GITOPS_UNIQUE_CLONE_PATH
-              value: {{ .Values.gitops.uniqueClonePath | quote }}
             {{- if .Values.gitops.shallow }}
             - name: GITOPS_SHALLOW
               value: "true"

@@ -193,23 +193,6 @@ export class GitService {
   }
 
   /**
-   * Filter files by watch paths (glob patterns)
-   */
-  private filterByWatchPaths(files: string[]): string[] {
-    // If no watch paths configured, return all files
-    if (!this.config.watchPaths || this.config.watchPaths.length === 0) {
-      return files;
-    }
-
-    // Filter files that match any of the watch patterns
-    return files.filter((file) => {
-      return this.config.watchPaths!.some((pattern) => {
-        return minimatch(file, pattern, { dot: true });
-      });
-    });
-  }
-
-  /**
    * Build authenticated URL for git operations
    */
   private buildAuthenticatedUrl(): string {
@@ -252,6 +235,44 @@ export class GitService {
       logger.error('❌ GitOps: Failed to get current commit:', error);
       return null;
     }
+  }
+
+  /**
+   * Primitives for the shared per-container flow. The orchestration of
+   * fetch / diff / pull / commands lives in monitor-service so a single
+   * working tree can serve multiple subscribers (each with their own
+   * lastCommit, watchPaths, and commands).
+   */
+  async fetch(): Promise<void> {
+    await this.git.fetch();
+  }
+
+  async getRemoteHead(): Promise<string | null> {
+    const remoteRef = `origin/${this.config.branch}`;
+    const head = (await this.git.revparse([remoteRef])).trim();
+    return head || null;
+  }
+
+  async getDiff(from: string, to: string): Promise<string[]> {
+    const summary = await this.git.diff(['--name-only', from, to]);
+    return summary.split('\n').filter((f) => f.trim().length > 0);
+  }
+
+  async pull(): Promise<void> {
+    await this.pullChanges();
+  }
+
+  async getCommitMessage(commit: string): Promise<string> {
+    const log = await this.git.log([commit, '-1']);
+    return log.latest?.message || 'Unknown';
+  }
+
+  filterByWatchPaths(files: string[], watchPaths?: string[]): string[] {
+    const patterns = watchPaths ?? this.config.watchPaths;
+    if (!patterns || patterns.length === 0) return files;
+    return files.filter((file) =>
+      patterns.some((pattern) => minimatch(file, pattern, { dot: true }))
+    );
   }
 
   /**

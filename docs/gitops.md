@@ -88,7 +88,7 @@ The chart mounts the secret at `/keys` with `0400` permissions automatically.
 | `GIT_PREVIOUS_COMMIT` | Previous commit hash |
 | `GIT_COMMIT_MESSAGE` | Commit message |
 | `GIT_CHANGED_FILES` | Comma-separated changed files |
-| `GITOPS_CLONE_PATH` | Local clone directory |
+| `GITOPS_CLONE_PATH` | Full path to the working tree for this command (`<parent>/<repo-name>`) |
 
 ## Per-Container GitOps
 

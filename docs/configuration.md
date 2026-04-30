@@ -68,7 +68,7 @@ All configuration is via environment variables.
 | `GITOPS_POLL_INTERVAL` | `60s` | Git check interval |
 | `GITOPS_WATCH_PATHS` | — | JSON array of glob patterns to watch |
 | `GITOPS_COMMANDS` | — | JSON array of commands to run on changes |
-| `GITOPS_CLONE_PATH` | `/tmp/<repo>` | Local directory for clone |
+| `GITOPS_CLONE_PATH` | `/tmp` | Parent directory for clones; repo lands at `<GITOPS_CLONE_PATH>/<repo-name>` |
 | `GITOPS_QUIET_MODE` | `false` | Suppress command stdout |
 
 ## Registry Credentials

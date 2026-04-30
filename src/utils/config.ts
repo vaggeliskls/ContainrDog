@@ -1,6 +1,6 @@
 import { Config, RegistryCredentials, UpdatePolicy, WebhookConfig, WebhookProvider, GitOpsConfig, GitAuthType, ECRConfig, ContainerRuntime, KubernetesConfig } from '../types';
 import { readFileSync, existsSync } from 'fs';
-import { extractRepoName, parseJSONLabel } from './label-parser';
+import { parseJSONLabel } from './label-parser';
 
 export class ConfigManager {
   private static instance: ConfigManager;
@@ -407,11 +407,10 @@ export class ConfigManager {
       }
     }
 
-    // Clone path (default: /tmp/{repo-name})
-    let clonePath = process.env.GITOPS_CLONE_PATH;
-    if (!clonePath) {
-      clonePath = `/tmp/${extractRepoName(repoUrl)}`;
-    }
+    // Clone path is a PARENT directory; each repo is cloned into
+    // <clonePath>/<repoName>. Default parent: /tmp. The join happens at the
+    // GitService construction site (see monitor-service.ts).
+    const clonePath = (process.env.GITOPS_CLONE_PATH || '/tmp').replace(/\/+$/, '');
 
     // Quiet mode (default: false - show all output)
     const quietMode = process.env.GITOPS_QUIET_MODE === 'true';

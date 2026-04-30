@@ -39,7 +39,11 @@ export class MonitorService {
     }
 
     if (config.gitops?.enabled) {
-      this.gitService = new GitService(config.gitops);
+      const cloneParent = (config.gitops.clonePath || '/tmp').replace(/\/+$/, '');
+      this.gitService = new GitService({
+        ...config.gitops,
+        clonePath: `${cloneParent}/${extractRepoName(config.gitops.repoUrl)}`,
+      });
       logger.info('📦 GitOps monitoring enabled');
     }
   }
@@ -294,9 +298,9 @@ export class MonitorService {
       let gitServiceData = this.containerGitServices.get(container.id);
 
       if (!gitServiceData) {
-        const clonePath =
-          container.gitopsClonePath ||
-          `/tmp/${extractRepoName(container.gitopsRepoUrl!)}`;
+        const cloneParent =
+          (container.gitopsClonePath || config.gitops?.clonePath || '/tmp').replace(/\/+$/, '');
+        const clonePath = `${cloneParent}/${extractRepoName(container.gitopsRepoUrl!)}`;
 
         const gitConfig = {
           enabled: true,
@@ -413,7 +417,8 @@ export class MonitorService {
       return;
     }
 
-    const clonePath = config.gitops?.clonePath || '/tmp/gitops-repo';
+    const cloneParent = (config.gitops?.clonePath || '/tmp').replace(/\/+$/, '');
+    const clonePath = `${cloneParent}/${extractRepoName(config.gitops!.repoUrl)}`;
     const quietMode = config.gitops?.quietMode ?? false;
 
     logger.info(`📦 GitOps (Global): Executing commands once for ${affectedContainers.length} affected container(s)...`);
@@ -534,11 +539,11 @@ export class MonitorService {
       return;
     }
 
-    let clonePath = config.gitops?.clonePath || '/tmp/gitops-repo';
-    if (container.gitopsRepoUrl) {
-      clonePath =
-        container.gitopsClonePath || `/tmp/${extractRepoName(container.gitopsRepoUrl)}`;
-    }
+    const repoUrl = container.gitopsRepoUrl || config.gitops?.repoUrl;
+    const cloneParent = (
+      container.gitopsClonePath || config.gitops?.clonePath || '/tmp'
+    ).replace(/\/+$/, '');
+    const clonePath = `${cloneParent}/${extractRepoName(repoUrl!)}`;
 
     const quietMode = container.gitopsQuietMode ?? config.gitops?.quietMode ?? false;
 

@@ -77,7 +77,7 @@ gitops:
   pollInterval: "60s"
   watchPaths: [] # e.g. ["docker-compose.yml", "config/**"]
   commands: [] # e.g. ["kubectl apply -f $GITOPS_CLONE_PATH/k8s/"]
-  clonePath: "" # local clone directory; defaults to /tmp/<repo-name>.
+  clonePath: "" # parent directory for clones; each repo lands at <clonePath>/<repo-name>. Default parent: /tmp.
   quietMode: false
 
 # ── Registry credentials ──────────────────────────────────────────────────────

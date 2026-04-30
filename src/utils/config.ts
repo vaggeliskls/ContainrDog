@@ -419,6 +419,10 @@ export class ConfigManager {
     // so workloads sharing a repo don't collide. Default: true. Set to 'false' to opt out.
     const uniqueClonePath = process.env.GITOPS_UNIQUE_CLONE_PATH !== 'false';
 
+    // Shallow clone: pass --depth 1 to skip repo history. Saves disk for large
+    // repos; the latest files are still present. Default: false.
+    const shallow = process.env.GITOPS_SHALLOW === 'true';
+
     return {
       enabled,
       repoUrl,
@@ -432,6 +436,7 @@ export class ConfigManager {
       clonePath,
       quietMode,
       uniqueClonePath,
+      shallow,
     };
   }
 

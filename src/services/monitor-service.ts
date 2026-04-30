@@ -298,12 +298,14 @@ export class MonitorService {
       (container.gitopsClonePath || gitopsConfig?.clonePath || '/tmp').replace(/\/+$/, '');
     const repoName = extractRepoName(container.gitopsRepoUrl!);
     if (gitopsConfig?.uniqueClonePath) {
-      // Include namespace when present (k8s) so workloads with the same name
-      // in different namespaces don't collide. Include branch so the same
-      // workload/repo on different branches gets isolated working trees.
+      // Use the workload name on Kubernetes (Deployment/StatefulSet/DaemonSet),
+      // not the per-pod container spec — replicas of the same workload share a
+      // path. Fall back to container.name for Docker. Include namespace and
+      // branch so cross-namespace and cross-branch reuse stays isolated.
+      const workloadId = container.workloadName || container.name;
       const identifier = container.namespace
-        ? `${container.namespace}-${container.name}`
-        : container.name;
+        ? `${container.namespace}-${workloadId}`
+        : workloadId;
       const branch = container.gitopsBranch || gitopsConfig?.branch || 'main';
       const slug = `${identifier}-${repoName}-${branch}`.replace(/[^a-zA-Z0-9._-]/g, '-');
       return `${cloneParent}/${slug}`;
@@ -334,6 +336,7 @@ export class MonitorService {
           watchPaths: container.gitopsWatchPaths,
           commands: container.gitopsCommands,
           clonePath,
+          shallow: config.gitops?.shallow,
         };
 
         const gitService = new GitService(gitConfig);

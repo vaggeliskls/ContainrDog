@@ -70,6 +70,7 @@ All configuration is via environment variables.
 | `GITOPS_COMMANDS` | — | JSON array of commands to run on changes |
 | `GITOPS_CLONE_PATH` | `/tmp` | Parent directory for clones; repo lands at `<GITOPS_CLONE_PATH>/<repo-name>` |
 | `GITOPS_UNIQUE_CLONE_PATH` | `true` | Isolate per-workload clones by namespace, workload, repo, and branch: `<GITOPS_CLONE_PATH>/<namespace>-<workload>-<repo>-<branch>`. Set `false` to share one working tree per repo. |
+| `GITOPS_SHALLOW` | `false` | Clone with `--depth 1` (history-less). Latest files are still on disk. Useful for large repos. |
 | `GITOPS_QUIET_MODE` | `false` | Suppress command stdout |
 
 ## Registry Credentials

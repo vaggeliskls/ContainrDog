@@ -86,6 +86,10 @@ gitops:
   # Set to false to share a single working tree across workloads of the same
   # repo (saves disk but races on concurrent fetch/pull and command exec).
   uniqueClonePath: true
+  # Clone with --depth 1 to skip repo history. Latest files are still present
+  # on disk; commands that read repo files work as before. Recommended for
+  # large repos (monorepos, repos with binary assets). Default: false.
+  shallow: false
 
 # ── Registry credentials ──────────────────────────────────────────────────────
 registry:

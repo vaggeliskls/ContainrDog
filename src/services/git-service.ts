@@ -87,13 +87,13 @@ export class GitService {
   private async cloneRepository(): Promise<void> {
     const repoUrl = this.buildAuthenticatedUrl();
 
-    await this.git.clone(repoUrl, this.config.clonePath, [
-      '--branch',
-      this.config.branch,
-      '--single-branch',
-    ]);
+    const args = ['--branch', this.config.branch, '--single-branch'];
+    if (this.config.shallow) {
+      args.push('--depth', '1');
+    }
+    await this.git.clone(repoUrl, this.config.clonePath, args);
 
-    logger.info(`✅ GitOps: Repository cloned successfully`);
+    logger.info(`✅ GitOps: Repository cloned successfully${this.config.shallow ? ' (shallow)' : ''}`);
   }
 
   /**

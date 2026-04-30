@@ -8,7 +8,7 @@ import { GitService } from './git-service';
 import { logger } from '../utils/logger';
 import { getConfig } from '../utils/config';
 import { extractRepoName } from '../utils/label-parser';
-import { ImageUpdateInfo, GitChangeInfo, ContainerInfo, RegistryCredentials, GitAuthType } from '../types';
+import { ImageUpdateInfo, GitChangeInfo, ContainerInfo, RegistryCredentials, GitAuthType, GitOpsConfig } from '../types';
 import { ImageParser } from '../utils/image-parser';
 import { minimatch } from 'minimatch';
 
@@ -289,6 +289,29 @@ export class MonitorService {
   }
 
   /**
+   * Build the clone path for a container's repo. When uniqueClonePath is set,
+   * the workload's name (sanitized) is prefixed onto the repo dir so that
+   * multiple workloads sharing the same repo get isolated working trees.
+   */
+  private resolveContainerClonePath(container: ContainerInfo, gitopsConfig?: GitOpsConfig): string {
+    const cloneParent =
+      (container.gitopsClonePath || gitopsConfig?.clonePath || '/tmp').replace(/\/+$/, '');
+    const repoName = extractRepoName(container.gitopsRepoUrl!);
+    if (gitopsConfig?.uniqueClonePath) {
+      // Include namespace when present (k8s) so workloads with the same name
+      // in different namespaces don't collide. Include branch so the same
+      // workload/repo on different branches gets isolated working trees.
+      const identifier = container.namespace
+        ? `${container.namespace}-${container.name}`
+        : container.name;
+      const branch = container.gitopsBranch || gitopsConfig?.branch || 'main';
+      const slug = `${identifier}-${repoName}-${branch}`.replace(/[^a-zA-Z0-9._-]/g, '-');
+      return `${cloneParent}/${slug}`;
+    }
+    return `${cloneParent}/${repoName}`;
+  }
+
+  /**
    * Check GitOps for a specific container with its own repository
    */
   private async checkContainerGitOps(container: ContainerInfo, now: number): Promise<void> {
@@ -298,9 +321,7 @@ export class MonitorService {
       let gitServiceData = this.containerGitServices.get(container.id);
 
       if (!gitServiceData) {
-        const cloneParent =
-          (container.gitopsClonePath || config.gitops?.clonePath || '/tmp').replace(/\/+$/, '');
-        const clonePath = `${cloneParent}/${extractRepoName(container.gitopsRepoUrl!)}`;
+        const clonePath = this.resolveContainerClonePath(container, config.gitops);
 
         const gitConfig = {
           enabled: true,
@@ -539,11 +560,13 @@ export class MonitorService {
       return;
     }
 
-    const repoUrl = container.gitopsRepoUrl || config.gitops?.repoUrl;
-    const cloneParent = (
-      container.gitopsClonePath || config.gitops?.clonePath || '/tmp'
-    ).replace(/\/+$/, '');
-    const clonePath = `${cloneParent}/${extractRepoName(repoUrl!)}`;
+    let clonePath: string;
+    if (container.gitopsRepoUrl) {
+      clonePath = this.resolveContainerClonePath(container, config.gitops);
+    } else {
+      const cloneParent = (config.gitops?.clonePath || '/tmp').replace(/\/+$/, '');
+      clonePath = `${cloneParent}/${extractRepoName(config.gitops!.repoUrl)}`;
+    }
 
     const quietMode = container.gitopsQuietMode ?? config.gitops?.quietMode ?? false;
 

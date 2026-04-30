@@ -128,6 +128,10 @@ spec:
             - name: GITOPS_CLONE_PATH
               value: {{ .Values.gitops.clonePath | quote }}
             {{- end }}
+            {{- if .Values.gitops.uniqueClonePath }}
+            - name: GITOPS_UNIQUE_CLONE_PATH
+              value: "true"
+            {{- end }}
             {{- if or .Values.gitops.sshKeySecret .Values.gitops.sshKeyPath }}
             - name: GITOPS_SSH_KEY_PATH
               value: {{ .Values.gitops.sshKeyPath | quote }}

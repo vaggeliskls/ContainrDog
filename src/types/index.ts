@@ -45,8 +45,9 @@ export interface GitOpsConfig {
   pollInterval: number; // in milliseconds
   watchPaths?: string[]; // Glob patterns for files/folders to watch
   commands?: string[]; // Commands to execute on changes
-  clonePath: string; // Local path to clone repo
+  clonePath: string; // Parent directory; repos clone into <clonePath>/<repoName>
   quietMode?: boolean; // Only show errors from commands (default: false)
+  uniqueClonePath?: boolean; // Prefix per-workload clones with the workload name to avoid collisions when multiple workloads share a repo
 }
 
 export interface Config {

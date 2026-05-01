@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/vaggeliskls/ContainrDog/compare/0.6.11...0.7.0) (2026-05-01)
+
+
+### Features
+
+* clone path tmp by default ([b72514b](https://github.com/vaggeliskls/ContainrDog/commit/b72514bcc3bd52210ee970f379060c78a63ae166))
+* gitops sync multiple repos per pod ([a53e879](https://github.com/vaggeliskls/ContainrDog/commit/a53e87908c04e1894fccc168db302f0f4cdba3e9))
+* global gitops notification ([2634c54](https://github.com/vaggeliskls/ContainrDog/commit/2634c540e97329f850a31d062f24f099311e0b6d))
+* isolated repos on gitops ([3fdc797](https://github.com/vaggeliskls/ContainrDog/commit/3fdc797f8cf4679316991821ea01d813cc22571a))
+* make uniqueClonePath true by default ([40a57ef](https://github.com/vaggeliskls/ContainrDog/commit/40a57effcfa33dc8504356ce1d389401247524ea))
+* shallow feature on  gitops ([b523e47](https://github.com/vaggeliskls/ContainrDog/commit/b523e47fb0fddc6d4564da78dfe64a571c29e1df))
+* support multiple labels ([ee9695a](https://github.com/vaggeliskls/ContainrDog/commit/ee9695ad76af3fb40ad56f3126036124f6fa45fe))
+
 ## [0.6.11](https://github.com/vaggeliskls/ContainrDog/compare/0.6.10...0.6.11) (2026-04-29)
 
 

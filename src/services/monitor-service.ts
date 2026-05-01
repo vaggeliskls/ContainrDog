@@ -597,22 +597,18 @@ export class MonitorService {
       }
 
       if (this.webhookService) {
-        for (const container of affectedContainers) {
-          await this.webhookService.sendGitOpsNotification(container, changes, true);
-        }
+        await this.webhookService.sendGlobalGitOpsNotification(affectedContainers, changes, true);
       }
     } catch (error) {
       logger.error(`   ❌ GitOps (Global) commands failed:`, error);
 
       if (this.webhookService) {
-        for (const container of affectedContainers) {
-          await this.webhookService.sendGitOpsNotification(
-            container,
-            changes,
-            false,
-            error instanceof Error ? error.message : String(error)
-          );
-        }
+        await this.webhookService.sendGlobalGitOpsNotification(
+          affectedContainers,
+          changes,
+          false,
+          error instanceof Error ? error.message : String(error)
+        );
       }
     }
   }

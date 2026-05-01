@@ -12,7 +12,8 @@ environment:
   - WEBHOOK_NOTIFY_SUCCESS=true    # notify on successful update (default: true)
   - WEBHOOK_NOTIFY_FAILURE=true    # notify on failed update (default: true)
   - WEBHOOK_NOTIFY_CHECK=false     # notify on every check cycle (default: false)
-  - WEBHOOK_NOTIFY_GITOPS=true     # notify when GitOps commands execute (default: true)
+  - WEBHOOK_NOTIFY_GITOPS_SUCCESS=true  # notify when GitOps commands succeed (default: true)
+  - WEBHOOK_NOTIFY_GITOPS_FAILURE=true  # notify when GitOps commands fail (default: true)
 ```
 
 ## Image Labels in Notifications
@@ -80,7 +81,7 @@ containrdog.image-label=["org.opencontainers.image.revision","org.opencontainers
 
 The `labels` array is only present when `IMAGE_LABEL` is configured. Each entry's `value` is `null` if that label is not found on the new image.
 
-**GitOps deploy** payload sent (when `WEBHOOK_NOTIFY_GITOPS=true`):
+**GitOps deploy** payload sent (gated by `WEBHOOK_NOTIFY_GITOPS_SUCCESS` / `WEBHOOK_NOTIFY_GITOPS_FAILURE`):
 ```json
 {
   "event": "gitops_deploy",

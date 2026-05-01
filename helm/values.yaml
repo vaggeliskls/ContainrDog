@@ -63,7 +63,8 @@ webhook:
   notifyOnSuccess: true
   notifyOnFailure: true
   notifyOnCheck: false
-  notifyOnGitops: true # notify when GitOps commands execute (default: true)
+  notifyOnGitopsSuccess: true # notify when GitOps commands succeed (default: true)
+  notifyOnGitopsFailure: true # notify when GitOps commands fail (default: true)
 
 # ── GitOps ────────────────────────────────────────────────────────────────────
 gitops:

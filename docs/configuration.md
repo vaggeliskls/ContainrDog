@@ -53,7 +53,8 @@ All configuration is via environment variables.
 | `WEBHOOK_NOTIFY_SUCCESS` | `true` | Notify on successful update |
 | `WEBHOOK_NOTIFY_FAILURE` | `true` | Notify on failed update |
 | `WEBHOOK_NOTIFY_CHECK` | `false` | Notify on every check cycle |
-| `WEBHOOK_NOTIFY_GITOPS` | `true` | Notify when GitOps commands execute |
+| `WEBHOOK_NOTIFY_GITOPS_SUCCESS` | `true` | Notify when GitOps commands succeed |
+| `WEBHOOK_NOTIFY_GITOPS_FAILURE` | `true` | Notify when GitOps commands fail |
 
 ## GitOps
 

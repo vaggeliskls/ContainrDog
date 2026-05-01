@@ -32,7 +32,8 @@ export interface WebhookConfig {
   notifyOnSuccess?: boolean; // Notify when update succeeds (default: true)
   notifyOnFailure?: boolean; // Notify when update fails (default: true)
   notifyOnCheck?: boolean; // Notify on every check (default: false)
-  notifyOnGitops?: boolean; // Notify when GitOps deploys changes (default: true)
+  notifyOnGitopsSuccess?: boolean; // Notify when GitOps commands succeed (default: true)
+  notifyOnGitopsFailure?: boolean; // Notify when GitOps commands fail (default: true)
 }
 
 export interface GitOpsConfig {

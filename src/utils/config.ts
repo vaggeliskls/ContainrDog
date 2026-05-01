@@ -328,7 +328,8 @@ export class ConfigManager {
     const notifyOnSuccess = process.env.WEBHOOK_NOTIFY_SUCCESS !== 'false'; // default: true
     const notifyOnFailure = process.env.WEBHOOK_NOTIFY_FAILURE !== 'false'; // default: true
     const notifyOnCheck = process.env.WEBHOOK_NOTIFY_CHECK === 'true'; // default: false
-    const notifyOnGitops = process.env.WEBHOOK_NOTIFY_GITOPS !== 'false'; // default: true
+    const notifyOnGitopsSuccess = process.env.WEBHOOK_NOTIFY_GITOPS_SUCCESS !== 'false'; // default: true
+    const notifyOnGitopsFailure = process.env.WEBHOOK_NOTIFY_GITOPS_FAILURE !== 'false'; // default: true
 
     return {
       enabled,
@@ -337,7 +338,8 @@ export class ConfigManager {
       notifyOnSuccess,
       notifyOnFailure,
       notifyOnCheck,
-      notifyOnGitops,
+      notifyOnGitopsSuccess,
+      notifyOnGitopsFailure,
     };
   }
 

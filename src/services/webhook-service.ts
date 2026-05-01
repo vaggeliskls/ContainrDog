@@ -45,9 +45,8 @@ export class WebhookService {
     error?: string
   ): Promise<void> {
     try {
-      if (!this.config.notifyOnGitops) {
-        return;
-      }
+      if (success && !this.config.notifyOnGitopsSuccess) return;
+      if (!success && !this.config.notifyOnGitopsFailure) return;
 
       const payload = this.buildGitOpsPayload(container, changes, success, error);
       await this.axiosInstance.post(this.config.url, payload);
@@ -69,7 +68,8 @@ export class WebhookService {
     error?: string
   ): Promise<void> {
     try {
-      if (!this.config.notifyOnGitops) return;
+      if (success && !this.config.notifyOnGitopsSuccess) return;
+      if (!success && !this.config.notifyOnGitopsFailure) return;
 
       const payload = this.buildGlobalGitOpsPayload(affectedContainers, changes, success, error);
       await this.axiosInstance.post(this.config.url, payload);

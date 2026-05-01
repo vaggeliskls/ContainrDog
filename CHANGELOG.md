@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/vaggeliskls/ContainrDog/compare/0.7.0...0.8.0) (2026-05-01)
+
+
+### Features
+
+* split gitops webhook notify into success/failure ([4dc4ada](https://github.com/vaggeliskls/ContainrDog/commit/4dc4ada796533fdfba6471b2c6ddc7c32eb676a1))
+
 ## [0.7.0](https://github.com/vaggeliskls/ContainrDog/compare/0.6.11...0.7.0) (2026-05-01)
 
 

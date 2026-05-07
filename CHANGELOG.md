@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/vaggeliskls/ContainrDog/compare/0.8.0...0.8.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* skip workloads mid-rollout to prevent duplicate update notifications ([0e010eb](https://github.com/vaggeliskls/ContainrDog/commit/0e010eb6db9c0aeb72f248caebcd0946a8ad68a0))
+
 ## [0.8.0](https://github.com/vaggeliskls/ContainrDog/compare/0.7.0...0.8.0) (2026-05-01)
 
 

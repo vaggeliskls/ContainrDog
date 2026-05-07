@@ -72,6 +72,10 @@ export class KubernetesClient implements IRuntimeClient {
         }
       }
 
+      // Track workloads we've already logged as mid-rollout this cycle so we
+      // don't spam the log once per pod.
+      const loggedUnstable = new Set<string>();
+
       for (const pod of pods) {
         if (pod.status?.phase !== 'Running') continue;
 
@@ -79,6 +83,19 @@ export class KubernetesClient implements IRuntimeClient {
 
         // Find the owning workload (Deployment, StatefulSet, DaemonSet) for update operations
         const workload = await this.findOwningWorkload(pod, namespace);
+
+        // Skip pods whose owning workload is mid-rollout. During a rolling
+        // update, old pods stay phase=Running with the previous digest until
+        // the new one is Ready — without this, every poll cycle that overlaps
+        // the rollout re-detects the same digest diff and re-patches/notifies.
+        if (workload && workload.stable === false) {
+          const key = `${namespace}/${workload.kind}/${workload.name}`;
+          if (!loggedUnstable.has(key)) {
+            loggedUnstable.add(key);
+            logger.debug(`⏳ Skipping ${workload.kind}/${workload.name} in ${namespace}: rollout in progress`);
+          }
+          continue;
+        }
 
         // Merge in priority order (lowest -> highest): pod labels, pod annotations, workload annotations
         // Workload (Deployment/StatefulSet/DaemonSet) root-level annotations take the highest precedence,
@@ -234,7 +251,13 @@ export class KubernetesClient implements IRuntimeClient {
   private async findOwningWorkload(
     pod: k8s.V1Pod,
     namespace: string
-  ): Promise<{ kind: string; name: string; annotations: Record<string, string> } | null> {
+  ): Promise<{
+    kind: string;
+    name: string;
+    annotations: Record<string, string>;
+    // false = rollout in progress; true = settled; undefined = unknown (read failed)
+    stable?: boolean;
+  } | null> {
     for (const ownerRef of pod.metadata?.ownerReferences || []) {
       if (ownerRef.kind === 'ReplicaSet') {
         try {
@@ -247,6 +270,7 @@ export class KubernetesClient implements IRuntimeClient {
                   kind: 'Deployment',
                   name: rsOwner.name,
                   annotations: deployment.metadata?.annotations || {},
+                  stable: this.isDeploymentStable(deployment),
                 };
               } catch {
                 return { kind: 'Deployment', name: rsOwner.name, annotations: {} };
@@ -259,20 +283,67 @@ export class KubernetesClient implements IRuntimeClient {
       } else if (ownerRef.kind === 'StatefulSet') {
         try {
           const ss = await this.appsV1Api.readNamespacedStatefulSet({ name: ownerRef.name, namespace });
-          return { kind: 'StatefulSet', name: ownerRef.name, annotations: ss.metadata?.annotations || {} };
+          return {
+            kind: 'StatefulSet',
+            name: ownerRef.name,
+            annotations: ss.metadata?.annotations || {},
+            stable: this.isStatefulSetStable(ss),
+          };
         } catch {
           return { kind: 'StatefulSet', name: ownerRef.name, annotations: {} };
         }
       } else if (ownerRef.kind === 'DaemonSet') {
         try {
           const ds = await this.appsV1Api.readNamespacedDaemonSet({ name: ownerRef.name, namespace });
-          return { kind: 'DaemonSet', name: ownerRef.name, annotations: ds.metadata?.annotations || {} };
+          return {
+            kind: 'DaemonSet',
+            name: ownerRef.name,
+            annotations: ds.metadata?.annotations || {},
+            stable: this.isDaemonSetStable(ds),
+          };
         } catch {
           return { kind: 'DaemonSet', name: ownerRef.name, annotations: {} };
         }
       }
     }
     return null;
+  }
+
+  // Rollout settled when: controller has observed the latest spec generation,
+  // every desired replica is updated and ready, and nothing is unavailable.
+  // When fields are missing we lean toward "stable" so a partially-populated
+  // status never blocks updates indefinitely.
+  private isDeploymentStable(d: k8s.V1Deployment): boolean {
+    const spec = d.spec;
+    const status = d.status;
+    if (!spec || !status) return true;
+    const desired = spec.replicas ?? 1;
+    if ((status.observedGeneration ?? 0) < (d.metadata?.generation ?? 0)) return false;
+    if ((status.updatedReplicas ?? 0) !== desired) return false;
+    if ((status.replicas ?? 0) !== desired) return false;
+    if ((status.unavailableReplicas ?? 0) > 0) return false;
+    return true;
+  }
+
+  private isStatefulSetStable(s: k8s.V1StatefulSet): boolean {
+    const spec = s.spec;
+    const status = s.status;
+    if (!spec || !status) return true;
+    const desired = spec.replicas ?? 1;
+    if ((status.observedGeneration ?? 0) < (s.metadata?.generation ?? 0)) return false;
+    if ((status.updatedReplicas ?? 0) !== desired) return false;
+    if ((status.readyReplicas ?? 0) !== desired) return false;
+    if (status.currentRevision && status.updateRevision && status.currentRevision !== status.updateRevision) return false;
+    return true;
+  }
+
+  private isDaemonSetStable(d: k8s.V1DaemonSet): boolean {
+    const status = d.status;
+    if (!status) return true;
+    if ((status.observedGeneration ?? 0) < (d.metadata?.generation ?? 0)) return false;
+    if ((status.updatedNumberScheduled ?? 0) !== (status.desiredNumberScheduled ?? 0)) return false;
+    if ((status.numberUnavailable ?? 0) > 0) return false;
+    return true;
   }
 
   /**

@@ -78,6 +78,14 @@ export class KubernetesClient implements IRuntimeClient {
 
       for (const pod of pods) {
         if (pod.status?.phase !== 'Running') continue;
+        // Skip pods being terminated. They stay phase=Running until the
+        // container exits (up to terminationGracePeriodSeconds), but k8s has
+        // already dropped them from Deployment.status.replicas — so the
+        // workload-stability check below sees the rollout as settled while
+        // the old pod is still here serving the previous digest. Without
+        // this skip, the old pod's digest overwrites imageDigestCache and
+        // we re-detect the same diff on the next poll.
+        if (pod.metadata?.deletionTimestamp) continue;
 
         const namespace = pod.metadata?.namespace || 'default';
 

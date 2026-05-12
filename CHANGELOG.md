@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/vaggeliskls/ContainrDog/compare/0.8.1...0.8.2) (2026-05-12)
+
+
+### Bug Fixes
+
+* skip terminating pods so cache doesn't pick up old digest ([183c925](https://github.com/vaggeliskls/ContainrDog/commit/183c9258c6fa5ffcbfd8a44ba7549870fafbe641))
+
 ## [0.8.1](https://github.com/vaggeliskls/ContainrDog/compare/0.8.0...0.8.1) (2026-05-07)
 
 

@@ -30,6 +30,7 @@ function makeRegistryService(tags: string[], digest?: string) {
   return {
     listTags: vi.fn().mockResolvedValue(tags),
     getImageManifest: vi.fn().mockResolvedValue(digest ? { digest } : null),
+    clearCycleCache: vi.fn(),
   };
 }
 
@@ -116,6 +117,7 @@ describe('UpdateChecker — semantic version policy', () => {
     const throwingRegistry = {
       listTags: vi.fn().mockRejectedValue(new Error('registry unreachable')),
       getImageManifest: vi.fn(),
+      clearCycleCache: vi.fn(),
     };
     checker = new UpdateChecker(throwingRegistry as any, runtimeClient as any);
     const containers = [

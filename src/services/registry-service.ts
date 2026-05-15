@@ -13,6 +13,14 @@ export class RegistryService {
   private credentials: Map<string, RegistryCredentials>;
   private ecrCredentials?: Map<string, RegistryCredentials>;
   private tokenCache: Map<string, CachedToken> = new Map();
+  // Per-cycle dedupe. The result caches collapse repeat lookups for the same
+  // image (e.g. many replicas of the same Deployment); the in-flight maps
+  // collapse concurrent lookups that arrive before the first finishes.
+  // Both are cleared by clearCycleCache() at the start of each check cycle.
+  private manifestCache: Map<string, RegistryManifest | null> = new Map();
+  private tagsCache: Map<string, string[]> = new Map();
+  private manifestInFlight: Map<string, Promise<RegistryManifest | null>> = new Map();
+  private tagsInFlight: Map<string, Promise<string[]>> = new Map();
 
   constructor() {
     this.axiosInstance = axios.create({
@@ -35,6 +43,20 @@ export class RegistryService {
   public setECRCredentials(ecrCredentials: Map<string, RegistryCredentials>): void {
     this.ecrCredentials = ecrCredentials;
     logger.debug(`ECR credentials updated for ${ecrCredentials.size} registries`);
+  }
+
+  /**
+   * Clear per-cycle dedupe caches. Called at the start of each update-check
+   * cycle so a hung or stale registry response can't be served indefinitely.
+   * Token cache is kept (it has its own TTL).
+   */
+  public clearCycleCache(): void {
+    this.manifestCache.clear();
+    this.tagsCache.clear();
+    // In-flight maps clean themselves up on resolution; clearing them only
+    // prevents new awaiters from joining an old promise — safe to do here.
+    this.manifestInFlight.clear();
+    this.tagsInFlight.clear();
   }
 
   private getCredentials(registry: string): RegistryCredentials | undefined {
@@ -117,6 +139,26 @@ export class RegistryService {
   }
 
   async getImageManifest(imageInfo: ImageInfo): Promise<RegistryManifest | null> {
+    const cacheKey = `${imageInfo.registry}/${imageInfo.repository}:${imageInfo.tag}`;
+    if (this.manifestCache.has(cacheKey)) {
+      return this.manifestCache.get(cacheKey) ?? null;
+    }
+    const existing = this.manifestInFlight.get(cacheKey);
+    if (existing) return existing;
+
+    const promise = this.fetchImageManifest(imageInfo).then((result) => {
+      this.manifestCache.set(cacheKey, result);
+      return result;
+    });
+    this.manifestInFlight.set(cacheKey, promise);
+    try {
+      return await promise;
+    } finally {
+      this.manifestInFlight.delete(cacheKey);
+    }
+  }
+
+  private async fetchImageManifest(imageInfo: ImageInfo): Promise<RegistryManifest | null> {
     try {
       const { registry, repository, tag } = imageInfo;
       const token = await this.getAuthToken(registry, repository);
@@ -253,6 +295,28 @@ export class RegistryService {
   }
 
   async listTags(imageInfo: ImageInfo): Promise<string[]> {
+    const cacheKey = `${imageInfo.registry}/${imageInfo.repository}`;
+    const cached = this.tagsCache.get(cacheKey);
+    if (cached) return cached;
+    const existing = this.tagsInFlight.get(cacheKey);
+    if (existing) return existing;
+
+    const promise = this.fetchTags(imageInfo).then((result) => {
+      // Only cache non-empty results — an empty list usually means a failed
+      // fetch (the catch in fetchTags returns []), and caching that would
+      // hide a recovery on the next cycle. clearCycleCache also wipes this.
+      if (result.length > 0) this.tagsCache.set(cacheKey, result);
+      return result;
+    });
+    this.tagsInFlight.set(cacheKey, promise);
+    try {
+      return await promise;
+    } finally {
+      this.tagsInFlight.delete(cacheKey);
+    }
+  }
+
+  private async fetchTags(imageInfo: ImageInfo): Promise<string[]> {
     try {
       const { registry, repository } = imageInfo;
       const token = await this.getAuthToken(registry, repository);

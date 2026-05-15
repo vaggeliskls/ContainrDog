@@ -11,6 +11,11 @@ import { getConfig } from '../utils/config';
 // a slow-drip response can otherwise consume the entire cycle.
 const CHECK_CONTAINER_TIMEOUT_MS = 60_000;
 
+// In-flight per-container checks. Higher = faster cycles, but more concurrent
+// pressure on the registry and the k8s API (for digest lookups). Kept modest
+// so a large container set on a small node doesn't burst the network.
+const CHECK_CONCURRENCY = 5;
+
 export class UpdateChecker {
   private registryService: RegistryService;
   private runtimeClient: IRuntimeClient;
@@ -21,27 +26,41 @@ export class UpdateChecker {
   }
 
   async checkForUpdates(containers: ContainerInfo[]): Promise<ImageUpdateInfo[]> {
-    const updates: ImageUpdateInfo[] = [];
+    // Drop per-cycle dedupe caches so each cycle observes fresh registry
+    // state. The token cache survives (it has its own TTL).
+    this.registryService.clearCycleCache();
 
-    for (const container of containers) {
-      let timer: NodeJS.Timeout | undefined;
-      try {
-        const timeout = new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () => reject(new Error(`update check timed out after ${CHECK_CONTAINER_TIMEOUT_MS}ms`)),
-            CHECK_CONTAINER_TIMEOUT_MS
-          );
-        });
-        const update = await Promise.race([this.checkContainerUpdate(container), timeout]);
-        if (update) {
-          updates.push(update);
+    const updates: ImageUpdateInfo[] = [];
+    let nextIndex = 0;
+
+    const worker = async () => {
+      while (true) {
+        const i = nextIndex++;
+        if (i >= containers.length) return;
+        const container = containers[i];
+
+        let timer: NodeJS.Timeout | undefined;
+        try {
+          const timeout = new Promise<never>((_, reject) => {
+            timer = setTimeout(
+              () => reject(new Error(`update check timed out after ${CHECK_CONTAINER_TIMEOUT_MS}ms`)),
+              CHECK_CONTAINER_TIMEOUT_MS
+            );
+          });
+          const update = await Promise.race([this.checkContainerUpdate(container), timeout]);
+          if (update) {
+            updates.push(update);
+          }
+        } catch (error) {
+          logger.error(`❌ Failed to check updates for ${container.name}: ${error}`);
+        } finally {
+          if (timer) clearTimeout(timer);
         }
-      } catch (error) {
-        logger.error(`❌ Failed to check updates for ${container.name}: ${error}`);
-      } finally {
-        if (timer) clearTimeout(timer);
       }
-    }
+    };
+
+    const workerCount = Math.min(CHECK_CONCURRENCY, containers.length);
+    await Promise.all(Array.from({ length: workerCount }, worker));
 
     return updates;
   }

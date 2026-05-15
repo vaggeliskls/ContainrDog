@@ -103,7 +103,18 @@ export class MonitorService {
 
   async runCheck(): Promise<void> {
     try {
-      await this.checkGitOpsChanges();
+      // Fetch the container list once per cycle and share it between the
+      // GitOps phase and the update-check phase. Without this, k8s API reads
+      // (pods + workload chains) happen twice per tick.
+      let containers: ContainerInfo[];
+      try {
+        containers = await this.runtimeClient.getRunningContainers();
+      } catch (error) {
+        logger.error('❌ Failed to list running containers:', error);
+        return;
+      }
+
+      await this.checkGitOpsChanges(containers);
 
       if (this.updateCheckExecuting) {
         logger.warn('⚠️  Update Check: Previous check still running, skipping this interval');
@@ -127,7 +138,7 @@ export class MonitorService {
       });
 
       try {
-        await Promise.race([this.executeUpdateCheck(), cycleTimeout]);
+        await Promise.race([this.executeUpdateCheck(containers), cycleTimeout]);
       } finally {
         if (cycleTimer) clearTimeout(cycleTimer);
         this.updateCheckExecuting = false;
@@ -137,9 +148,7 @@ export class MonitorService {
     }
   }
 
-  private async executeUpdateCheck(): Promise<void> {
-    const containers = await this.runtimeClient.getRunningContainers();
-
+  private async executeUpdateCheck(containers: ContainerInfo[]): Promise<void> {
     if (containers.length === 0) {
       logger.info('🔍 No containers found to monitor');
       return;
@@ -253,11 +262,9 @@ export class MonitorService {
   /**
    * Check for GitOps changes on a separate interval
    */
-  private async checkGitOpsChanges(): Promise<void> {
+  private async checkGitOpsChanges(containers: ContainerInfo[]): Promise<void> {
     const config = getConfig();
     const now = Date.now();
-
-    const containers = await this.runtimeClient.getRunningContainers();
 
     // Check global GitOps service
     if (this.gitService) {

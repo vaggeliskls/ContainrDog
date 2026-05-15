@@ -11,6 +11,14 @@ import {
   parseGitAuthTypeLabel,
 } from '../utils/label-parser';
 
+interface WorkloadInfo {
+  kind: string;
+  name: string;
+  annotations: Record<string, string>;
+  // false = rollout in progress; true = settled; undefined = unknown (read failed)
+  stable?: boolean;
+}
+
 export class KubernetesClient implements IRuntimeClient {
   private kc: k8s.KubeConfig;
   private coreV1Api: k8s.CoreV1Api;
@@ -76,6 +84,11 @@ export class KubernetesClient implements IRuntimeClient {
       // don't spam the log once per pod.
       const loggedUnstable = new Set<string>();
 
+      // Per-cycle workload cache: pods of the same Deployment share an
+      // ownerRef (their ReplicaSet), so caching keyed on the pod's first
+      // ownerRef collapses N replica lookups into one.
+      const workloadCache = new Map<string, WorkloadInfo | null>();
+
       for (const pod of pods) {
         if (pod.status?.phase !== 'Running') continue;
         // Skip pods being terminated. They stay phase=Running until the
@@ -90,7 +103,7 @@ export class KubernetesClient implements IRuntimeClient {
         const namespace = pod.metadata?.namespace || 'default';
 
         // Find the owning workload (Deployment, StatefulSet, DaemonSet) for update operations
-        const workload = await this.findOwningWorkload(pod, namespace);
+        const workload = await this.findOwningWorkload(pod, namespace, workloadCache);
 
         // Skip pods whose owning workload is mid-rollout. During a rolling
         // update, old pods stay phase=Running with the previous digest until
@@ -255,17 +268,33 @@ export class KubernetesClient implements IRuntimeClient {
    * Walk ownerReferences to find the top-level workload that owns a pod.
    * Pod -> ReplicaSet -> Deployment, or Pod -> StatefulSet/DaemonSet directly.
    * Also returns the workload's own annotations so they can be merged with pod annotations.
+   *
+   * Results are memoized in the caller-provided cache, keyed by the pod's
+   * first ownerRef — pods of the same ReplicaSet/StatefulSet/DaemonSet share
+   * a key and avoid redundant API reads.
    */
   private async findOwningWorkload(
     pod: k8s.V1Pod,
+    namespace: string,
+    cache: Map<string, WorkloadInfo | null>
+  ): Promise<WorkloadInfo | null> {
+    const firstOwner = pod.metadata?.ownerReferences?.[0];
+    const cacheKey = firstOwner ? `${namespace}/${firstOwner.kind}/${firstOwner.name}` : null;
+    if (cacheKey && cache.has(cacheKey)) {
+      return cache.get(cacheKey) ?? null;
+    }
+
+    const resolved = await this.resolveOwningWorkload(pod, namespace);
+    if (cacheKey) {
+      cache.set(cacheKey, resolved);
+    }
+    return resolved;
+  }
+
+  private async resolveOwningWorkload(
+    pod: k8s.V1Pod,
     namespace: string
-  ): Promise<{
-    kind: string;
-    name: string;
-    annotations: Record<string, string>;
-    // false = rollout in progress; true = settled; undefined = unknown (read failed)
-    stable?: boolean;
-  } | null> {
+  ): Promise<WorkloadInfo | null> {
     for (const ownerRef of pod.metadata?.ownerReferences || []) {
       if (ownerRef.kind === 'ReplicaSet') {
         try {

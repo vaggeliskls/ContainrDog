@@ -112,52 +112,71 @@ export class MonitorService {
 
       this.updateCheckExecuting = true;
 
+      // Hard upper bound on the whole cycle so the executing flag always
+      // releases. Without this, any unforeseen hang below (registry, runtime
+      // client, etc.) leaves the flag stuck and every subsequent tick is
+      // skipped — see prod incident 2026-05-15 where the flag stayed true
+      // for 4+ hours.
+      const cycleBudgetMs = Math.min(Math.max(2 * getConfig().interval, 60_000), 300_000);
+      let cycleTimer: NodeJS.Timeout | undefined;
+      const cycleTimeout = new Promise<never>((_, reject) => {
+        cycleTimer = setTimeout(
+          () => reject(new Error(`update check cycle exceeded ${cycleBudgetMs}ms budget`)),
+          cycleBudgetMs
+        );
+      });
+
       try {
-        const containers = await this.runtimeClient.getRunningContainers();
-
-        if (containers.length === 0) {
-          logger.info('🔍 No containers found to monitor');
-          return;
-        }
-
-        const containerIds = containers.map((c) => c.id).sort().join(',');
-        if (containerIds !== this.lastMonitoredContainerIds) {
-          this.lastMonitoredContainerIds = containerIds;
-          logger.info(`🔍 Monitoring ${containers.length} container(s):`);
-          for (const container of containers) {
-            const labelHint = container.imageLabelKeys?.length ? ` [labels: ${container.imageLabelKeys.join(', ')}]` : '';
-            logger.info(`   📦 ${container.name} (${container.image})${labelHint}`);
-          }
-        }
-
-        const updates = await this.updateChecker.checkForUpdates(containers);
-
-        if (updates.length === 0) {
-          if (this.webhookService) {
-            await this.webhookService.sendCheckNotification(containers.length, 0);
-          }
-          return;
-        }
-
-        logger.info('═══════════════════════════════════════════════════════════════');
-        logger.info(`🆕 Found ${updates.length} update(s) available`);
-        logger.info('═══════════════════════════════════════════════════════════════');
-
-        for (const update of updates) {
-          await this.handleUpdate(update);
-          logger.info('───────────────────────────────────────────────────────────────');
-        }
-
-        logger.info('═══════════════════════════════════════════════════════════════');
-
-        if (this.webhookService) {
-          await this.webhookService.sendCheckNotification(containers.length, updates.length);
-        }
+        await Promise.race([this.executeUpdateCheck(), cycleTimeout]);
       } finally {
+        if (cycleTimer) clearTimeout(cycleTimer);
         this.updateCheckExecuting = false;
       }
     } catch (error) {
       logger.error('❌ Error during update check:', error);
+    }
+  }
+
+  private async executeUpdateCheck(): Promise<void> {
+    const containers = await this.runtimeClient.getRunningContainers();
+
+    if (containers.length === 0) {
+      logger.info('🔍 No containers found to monitor');
+      return;
+    }
+
+    const containerIds = containers.map((c) => c.id).sort().join(',');
+    if (containerIds !== this.lastMonitoredContainerIds) {
+      this.lastMonitoredContainerIds = containerIds;
+      logger.info(`🔍 Monitoring ${containers.length} container(s):`);
+      for (const container of containers) {
+        const labelHint = container.imageLabelKeys?.length ? ` [labels: ${container.imageLabelKeys.join(', ')}]` : '';
+        logger.info(`   📦 ${container.name} (${container.image})${labelHint}`);
+      }
+    }
+
+    const updates = await this.updateChecker.checkForUpdates(containers);
+
+    if (updates.length === 0) {
+      if (this.webhookService) {
+        await this.webhookService.sendCheckNotification(containers.length, 0);
+      }
+      return;
+    }
+
+    logger.info('═══════════════════════════════════════════════════════════════');
+    logger.info(`🆕 Found ${updates.length} update(s) available`);
+    logger.info('═══════════════════════════════════════════════════════════════');
+
+    for (const update of updates) {
+      await this.handleUpdate(update);
+      logger.info('───────────────────────────────────────────────────────────────');
+    }
+
+    logger.info('═══════════════════════════════════════════════════════════════');
+
+    if (this.webhookService) {
+      await this.webhookService.sendCheckNotification(containers.length, updates.length);
     }
   }
 

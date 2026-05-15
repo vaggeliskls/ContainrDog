@@ -6,6 +6,11 @@ import { RegistryService } from './registry-service';
 import { IRuntimeClient } from './runtime-client';
 import { getConfig } from '../utils/config';
 
+// Hard upper bound for a single container's update check. Axios per-request
+// timeouts cover individual HTTP calls, but a sequence of stalled requests or
+// a slow-drip response can otherwise consume the entire cycle.
+const CHECK_CONTAINER_TIMEOUT_MS = 60_000;
+
 export class UpdateChecker {
   private registryService: RegistryService;
   private runtimeClient: IRuntimeClient;
@@ -19,13 +24,22 @@ export class UpdateChecker {
     const updates: ImageUpdateInfo[] = [];
 
     for (const container of containers) {
+      let timer: NodeJS.Timeout | undefined;
       try {
-        const update = await this.checkContainerUpdate(container);
+        const timeout = new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`update check timed out after ${CHECK_CONTAINER_TIMEOUT_MS}ms`)),
+            CHECK_CONTAINER_TIMEOUT_MS
+          );
+        });
+        const update = await Promise.race([this.checkContainerUpdate(container), timeout]);
         if (update) {
           updates.push(update);
         }
       } catch (error) {
         logger.error(`❌ Failed to check updates for ${container.name}: ${error}`);
+      } finally {
+        if (timer) clearTimeout(timer);
       }
     }
 

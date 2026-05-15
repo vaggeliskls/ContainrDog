@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.3](https://github.com/vaggeliskls/ContainrDog/compare/0.8.2...0.8.3) (2026-05-15)
+
+
+### Bug Fixes
+
+* bound update check duration to prevent stuck executing flag ([4ccdc44](https://github.com/vaggeliskls/ContainrDog/commit/4ccdc44d4e1c878b4c239adc28f68aaf8211e9ea))
+
 ## [0.8.2](https://github.com/vaggeliskls/ContainrDog/compare/0.8.1...0.8.2) (2026-05-12)
 
 

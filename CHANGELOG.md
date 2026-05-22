@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.0](https://github.com/vaggeliskls/ContainrDog/compare/0.8.3...0.9.0) (2026-05-22)
+
+
+### Features
+
+* add read-only web dashboard ([0a66e45](https://github.com/vaggeliskls/ContainrDog/commit/0a66e45046b172e547826f142064885768c3ee1c))
+* add read-only web dashboard ([07a0022](https://github.com/vaggeliskls/ContainrDog/commit/07a00224a6736185618b2c9461ea4e4ac6c6432b))
+
 ## [0.8.3](https://github.com/vaggeliskls/ContainrDog/compare/0.8.2...0.8.3) (2026-05-15)
 
 

@@ -7,6 +7,7 @@ import { IRuntimeClient } from './services/runtime-client';
 import { logger } from './utils/logger';
 import { getConfig } from './utils/config';
 import { ContainerRuntime } from './types';
+import { ApiServer } from './services/api-server';
 
 class ContainerUpdater {
   private monitorService: MonitorService;
@@ -37,6 +38,11 @@ class ContainerUpdater {
     try {
       logger.info('🐾 Starting ContainrDog...');
       this.logConfiguration();
+
+      if (process.env.UI_ENABLED === 'true') {
+        const uiPort = parseInt(process.env.UI_PORT || '8080', 10);
+        new ApiServer(uiPort).start();
+      }
 
       if (this.ecrAuthService) {
         const ecrInitialized = await this.ecrAuthService.initialize();

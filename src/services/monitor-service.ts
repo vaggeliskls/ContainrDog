@@ -9,6 +9,7 @@ import { logger } from '../utils/logger';
 import { getConfig } from '../utils/config';
 import { extractRepoName } from '../utils/label-parser';
 import { ImageUpdateInfo, GitChangeInfo, ContainerInfo, RegistryCredentials, GitAuthType, GitOpsConfig } from '../types';
+import { StatusStore } from './status-store';
 import { ImageParser } from '../utils/image-parser';
 import { minimatch } from 'minimatch';
 
@@ -111,6 +112,7 @@ export class MonitorService {
       }
 
       this.updateCheckExecuting = true;
+      StatusStore.instance.setCheckInProgress(true);
 
       // Hard upper bound on the whole cycle so the executing flag always
       // releases. Without this, any unforeseen hang below (registry, runtime
@@ -131,6 +133,7 @@ export class MonitorService {
       } finally {
         if (cycleTimer) clearTimeout(cycleTimer);
         this.updateCheckExecuting = false;
+        StatusStore.instance.setCheckInProgress(false);
       }
     } catch (error) {
       logger.error('❌ Error during update check:', error);
@@ -144,6 +147,8 @@ export class MonitorService {
       logger.info('🔍 No containers found to monitor');
       return;
     }
+
+    StatusStore.instance.setContainers(containers);
 
     const containerIds = containers.map((c) => c.id).sort().join(',');
     if (containerIds !== this.lastMonitoredContainerIds) {
@@ -181,27 +186,43 @@ export class MonitorService {
   }
 
   private async handleUpdate(update: ImageUpdateInfo): Promise<void> {
-    try {
-      const config = getConfig();
-      const container = update.container;
+    const config = getConfig();
+    const container = update.container;
+    const autoUpdateEnabled =
+      container.autoUpdate !== undefined ? container.autoUpdate : config.autoUpdate;
 
+    const baseEvent = {
+      timestamp: new Date().toISOString(),
+      containerName: container.name,
+      fromTag: update.currentImage.tag,
+      toTag: update.availableImage.tag,
+      updateType: update.updateType,
+      autoUpdated: autoUpdateEnabled,
+      labelValues: update.availableLabelValues,
+    };
+
+    try {
       logger.info(`🔔 UPDATE AVAILABLE`);
       logger.info(`   Container: ${container.name}`);
       logger.info(`   Current:   ${update.currentImage.tag}`);
       logger.info(`   New:       ${update.availableImage.tag}`);
 
-      const autoUpdateEnabled =
-        container.autoUpdate !== undefined ? container.autoUpdate : config.autoUpdate;
-
       if (autoUpdateEnabled) {
         logger.info(`   Action:    Auto-updating...`);
         await this.autoUpdateContainer(update);
+        StatusStore.instance.recordUpdate({ ...baseEvent, success: true });
       } else {
         logger.info(`   Action:    Skipped (auto-update disabled)`);
         logger.info(`   💡 Tip: Set AUTO_UPDATE=true or add label containrdog.auto-update=true`);
+        StatusStore.instance.recordUpdate({ ...baseEvent, success: false });
       }
     } catch (error) {
       logger.error(`❌ Failed to handle update for ${update.container.name}:`, error);
+      StatusStore.instance.recordUpdate({
+        ...baseEvent,
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

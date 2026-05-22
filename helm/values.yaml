@@ -118,6 +118,13 @@ ecr:
   accountId: "" # auto-builds registry URL if registries is empty
   authRefreshInterval: "6h"
 
+# ── Dashboard UI ─────────────────────────────────────────────────────────────
+ui:
+  enabled: false      # set true to enable the read-only web dashboard
+  port: 8080          # container port (also used as the Service port)
+  service:
+    type: ClusterIP   # ClusterIP | NodePort | LoadBalancer
+
 # ── Sensitive values via existing Secret ─────────────────────────────────────
 # Instead of putting secrets in values, reference a pre-created Secret.
 # Keys in the secret become env vars in the pod.

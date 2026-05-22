@@ -59,6 +59,39 @@ Set a custom socket path if needed:
 -e SOCKET_PATH=/run/podman/podman.sock
 ```
 
+### Dashboard UI (Docker)
+
+Add `UI_ENABLED=true` and publish the port:
+
+```bash
+docker run -d \
+  --name containrdog \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -e INTERVAL=5m \
+  -e UI_ENABLED=true \
+  -p 8080:8080 \
+  ghcr.io/vaggeliskls/containrdog
+```
+
+In **docker-compose.yml**:
+
+```yaml
+services:
+  containrdog:
+    image: ghcr.io/vaggeliskls/containrdog:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - INTERVAL=5m
+      - UI_ENABLED=true
+      - UI_PORT=8080       # optional, default is 8080
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+```
+
+Open `http://localhost:8080` to view the dashboard.
+
 ### Labeling containers
 
 Add the `containrdog-enabled=true` label to containers you want monitored:
@@ -262,6 +295,32 @@ spec:
 ```
 
 See [Labels & Annotations](labels.md) for all available annotations.
+
+### Dashboard UI (Kubernetes)
+
+The dashboard is disabled by default. Enable it in your Helm values — the chart automatically creates and removes the `Service` alongside the deployment:
+
+```yaml
+ui:
+  enabled: true
+  port: 8080          # optional, default is 8080
+  service:
+    type: ClusterIP   # ClusterIP | NodePort | LoadBalancer
+```
+
+```bash
+helm upgrade containrdog oci://ghcr.io/vaggeliskls/charts/containrdog \
+  --set ui.enabled=true \
+  -n containrdog -f values-prod.yaml
+```
+
+Access via `kubectl port-forward` (ClusterIP):
+```bash
+kubectl port-forward svc/containrdog-ui 8080:8080 -n containrdog
+# then open http://localhost:8080
+```
+
+For persistent access, use `type: LoadBalancer` or add an `Ingress` pointing at the service port.
 
 ### RBAC
 

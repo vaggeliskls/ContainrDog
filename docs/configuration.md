@@ -81,6 +81,19 @@ All configuration is via environment variables.
 | `REGISTRY_CREDENTIALS` | — | JSON credentials (alternative to config.json) |
 | `CREDENTIALS_FILE` | — | Path to a JSON credentials file |
 
+## Dashboard UI
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `UI_ENABLED` | `false` | Enable the web dashboard |
+| `UI_PORT` | `8080` | Port the dashboard listens on |
+
+When enabled, the dashboard is available at `http://<host>:<UI_PORT>/` and exposes a read-only JSON API at `/api/status`.
+
+> **Docker**: publish the port with `-p 8080:8080` (or `ports: ["8080:8080"]` in Compose).
+>
+> **Kubernetes**: set `ui.enabled: true` in Helm values — the chart creates and removes the `Service` automatically. See [Deployment → Dashboard UI](deployments.md#dashboard-ui-kubernetes).
+
 ## AWS ECR
 
 | Variable | Default | Description |

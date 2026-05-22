@@ -134,7 +134,7 @@ spec:
             - name: GITOPS_SHALLOW
               value: "true"
             {{- end }}
-            {{- if or .Values.gitops.sshKeySecret .Values.gitops.sshKeyPath }}
+            {{- if eq .Values.gitops.authType "ssh" }}
             - name: GITOPS_SSH_KEY_PATH
               value: {{ .Values.gitops.sshKeyPath | quote }}
             {{- end }}
@@ -190,9 +190,24 @@ spec:
                   key: REGISTRY_CREDENTIALS
             {{- end }}
 
+            # Dashboard UI
+            - name: UI_ENABLED
+              value: {{ .Values.ui.enabled | quote }}
+            {{- if .Values.ui.enabled }}
+            - name: UI_PORT
+              value: {{ .Values.ui.port | quote }}
+            {{- end }}
+
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+
+          {{- if .Values.ui.enabled }}
+          ports:
+            - name: ui
+              containerPort: {{ .Values.ui.port }}
+              protocol: TCP
+          {{- end }}
 
           {{- with .Values.resources }}
           resources:

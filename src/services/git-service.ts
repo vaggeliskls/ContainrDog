@@ -101,7 +101,8 @@ export class GitService {
    */
   private async pullChanges(): Promise<void> {
     await this.git.fetch();
-    await this.git.pull('origin', this.config.branch);
+    // Reset hard to remote ref to avoid "divergent branches" errors on a read-only clone.
+    await this.git.reset(['--hard', `origin/${this.config.branch}`]);
   }
 
   /**

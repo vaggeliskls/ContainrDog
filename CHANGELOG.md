@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/vaggeliskls/ContainrDog/compare/0.9.0...0.9.1) (2026-06-05)
+
+
+### Bug Fixes
+
+* use git reset --hard instead of pull to avoid divergent branch errors ([50718e7](https://github.com/vaggeliskls/ContainrDog/commit/50718e7eff09f427da36341cf13c4131baa8ad7c))
+
 ## [0.9.0](https://github.com/vaggeliskls/ContainrDog/compare/0.8.3...0.9.0) (2026-05-22)
 
 

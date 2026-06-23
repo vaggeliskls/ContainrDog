@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.10.0](https://github.com/vaggeliskls/ContainrDog/compare/0.9.1...0.10.0) (2026-06-23)
+
+
+### Features
+
+* on-demand GitOps HTTP triggers, always-on API, ArgoCD-style dashboard ([d22cda8](https://github.com/vaggeliskls/ContainrDog/commit/d22cda8162c2ca674efbafe51dd75f266d24666b))
+* update health-check + rollback, GitOps HTTP triggers, ArgoCD-style dashboard ([712fc3b](https://github.com/vaggeliskls/ContainrDog/commit/712fc3bbaaf824620e32970591d7f2f86bc659df))
+* verify update health, roll back on failure, and cool down failed retries ([56c63a7](https://github.com/vaggeliskls/ContainrDog/commit/56c63a7fbbb890cfa14d0013c92c3cd0d3700b94))
+
 ## [0.9.1](https://github.com/vaggeliskls/ContainrDog/compare/0.9.0...0.9.1) (2026-06-05)
 
 

@@ -28,18 +28,21 @@
     #status-dot.err  { background: var(--red); }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-    main { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+    main { padding: 20px 24px; max-width: 1500px; margin: 0 auto; }
 
     /* ── Stat cards ── */
-    .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
     .card .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
     .card .val { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .card .val.green  { color: var(--green); }
+    .card .val.red    { color: var(--red); }
     .card .val.yellow { color: var(--yellow); }
     .card .val.blue   { color: var(--blue); }
     .card .val.orange { color: var(--orange); }
     .card .val.muted  { color: var(--muted); }
+    .card .split { font-size: 13px; font-weight: 600; display: flex; gap: 10px; flex-wrap: wrap; }
+    .card .split span { white-space: nowrap; }
 
     /* ── Sections ── */
     section { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 20px; overflow: hidden; }
@@ -60,7 +63,57 @@
     .cfg .k { color: var(--muted); font-size: 12px; }
     .cfg .v { font-weight: 500; font-size: 13px; text-align: right; }
 
-    /* ── Tables ── */
+    /* ── Toolbar / filters ── */
+    .toolbar { display: flex; gap: 8px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--surface2); flex-wrap: wrap; }
+    .toolbar input {
+      background: var(--bg); border: 1px solid var(--border); color: var(--text);
+      border-radius: 6px; padding: 6px 10px; font-size: 13px; min-width: 200px; flex: 0 1 240px;
+    }
+    .toolbar .spacer { flex: 1; }
+    .chip {
+      cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 9px; border-radius: 6px; font-size: 12px; font-weight: 600;
+      border: 1px solid transparent; background: rgba(139,148,158,0.10); color: var(--muted);
+    }
+    .chip .n { opacity: 0.8; font-weight: 700; }
+    .chip.active { border-color: currentColor; }
+    .chip.green  { color: var(--green); }
+    .chip.red    { color: var(--red); }
+    .chip.orange { color: var(--orange); }
+    .chip.yellow { color: var(--yellow); }
+    .chip.blue   { color: var(--blue); }
+
+    /* ── Component grid (ArgoCD-style cards) ── */
+    .components { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 12px; padding: 14px 16px; }
+    .comp {
+      background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--muted);
+      border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column;
+    }
+    .comp.h-healthy     { border-left-color: var(--green); }
+    .comp.h-degraded    { border-left-color: var(--red); }
+    .comp.h-progressing { border-left-color: var(--yellow); }
+    .comp.h-unknown     { border-left-color: var(--muted); }
+
+    .comp-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .comp-name { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 7px; min-width: 0; }
+    .comp-name .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: var(--muted); }
+    .comp-name .dot.healthy { background: var(--green); }
+    .comp-name .dot.degraded { background: var(--red); }
+    .comp-name .dot.progressing { background: var(--yellow); animation: pulse 1.4s infinite; }
+    .comp-name .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .comp-sub { color: var(--muted); font-size: 11px; margin: 2px 0 0 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .pills { display: flex; gap: 6px; margin: 10px 0 8px; flex-wrap: wrap; }
+    .comp-img { font-family: 'Cascadia Code','Fira Code',Consolas,monospace; font-size: 12px; color: var(--text);
+      background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 4px 7px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tagflow { margin-top: 7px; font-family: 'Cascadia Code','Fira Code',Consolas,monospace; font-size: 12px; }
+    .tagflow .arrow { color: var(--muted); margin: 0 5px; }
+    .meta { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 10px; }
+    .comp-err { margin-top: 9px; font-size: 11px; color: var(--red); background: rgba(248,81,73,0.08);
+      border-radius: 5px; padding: 5px 7px; word-break: break-word; }
+
+    /* ── Tables (recent updates) ── */
     table { width: 100%; border-collapse: collapse; }
     thead th {
       padding: 9px 16px; text-align: left; font-size: 11px;
@@ -89,7 +142,6 @@
     .empty { padding: 28px 16px; text-align: center; color: var(--muted); font-size: 13px; }
     .arrow { color: var(--muted); margin: 0 4px; }
     .ts    { color: var(--muted); font-size: 12px; white-space: nowrap; }
-    .tags  { display: flex; flex-wrap: wrap; gap: 4px; }
   </style>
 </head>
 <body>
@@ -111,13 +163,14 @@
   <div class="stat-cards" id="stat-cards"></div>
 
   <section>
-    <h2>&#x2699;&#xFE0F; Configuration</h2>
-    <div class="config-grid" id="cfg-grid"></div>
+    <h2>&#x1F4E6; Components <span class="count" id="cnt-containers">0</span></h2>
+    <div class="toolbar" id="toolbar"></div>
+    <div id="containers-wrap"></div>
   </section>
 
   <section>
-    <h2>&#x1F4E6; Monitored Containers <span class="count" id="cnt-containers">0</span></h2>
-    <div id="containers-wrap"></div>
+    <h2>&#x2699;&#xFE0F; Configuration</h2>
+    <div class="config-grid" id="cfg-grid"></div>
   </section>
 
   <section>
@@ -131,16 +184,16 @@
   var REFRESH = 30;
   var countdown = REFRESH;
   var timer = null;
+  var LAST = null;                       // last status payload (for re-filtering)
+  var filter = { q: '', health: null, sync: null };
 
   /* ── Helpers ── */
 
   function esc(s) {
     if (s == null) return '';
     return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   function fmtMs(ms) {
@@ -149,17 +202,14 @@
     if (ms < 3600000) return (ms / 60000).toFixed(0) + 'm';
     return (ms / 3600000).toFixed(1) + 'h';
   }
-
   function fmtTime(iso) {
     if (!iso) return '—';
     return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   }
-
   function fmtDateTime(iso) {
     if (!iso) return '—';
     return new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   }
-
   function timeAgo(iso) {
     if (!iso) return '—';
     var diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -168,11 +218,26 @@
     if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
     return Math.floor(diff / 3600) + 'h ago';
   }
+  function badge(text, color) { return '<span class="badge ' + color + '">' + esc(text) + '</span>'; }
+  function setInner(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
 
-  function badge(text, color) {
-    return '<span class="badge ' + color + '">' + esc(text) + '</span>';
+  function healthMeta(h) {
+    switch (h) {
+      case 'healthy':     return { label: 'Healthy',     color: 'green' };
+      case 'degraded':    return { label: 'Degraded',    color: 'red' };
+      case 'progressing': return { label: 'Progressing', color: 'yellow' };
+      default:            return { label: 'Unknown',     color: 'muted' };
+    }
   }
-
+  function syncMeta(s) {
+    switch (s) {
+      case 'synced':   return { label: 'Synced',    color: 'green' };
+      case 'outdated': return { label: 'OutOfSync', color: 'orange' };
+      case 'updating': return { label: 'Updating',  color: 'blue' };
+      case 'failed':   return { label: 'Failed',    color: 'red' };
+      default:         return { label: '—',         color: 'muted' };
+    }
+  }
   function fmtUpdateType(t) {
     switch (t) {
       case 'semantic_version': return badge('semver', 'green');
@@ -182,53 +247,69 @@
     }
   }
 
-  function setInner(id, html) {
-    var el = document.getElementById(id);
-    if (el) el.innerHTML = html;
-  }
-
-  /* ── Renderers ── */
+  /* ── Stat cards ── */
 
   function renderCards(d) {
     var busy = d.checkInProgress;
-    var dot  = document.getElementById('status-dot');
-    var txt  = document.getElementById('status-text');
+    var dot = document.getElementById('status-dot');
+    var txt = document.getElementById('status-text');
     if (dot) dot.className = busy ? 'busy' : 'ok';
     if (txt) txt.textContent = busy ? 'Checking…' : 'Idle';
 
+    var cs = d.containers || [];
+    var h = { healthy: 0, degraded: 0, progressing: 0, unknown: 0 };
+    var s = { synced: 0, outdated: 0, updating: 0, failed: 0 };
+    cs.forEach(function (c) {
+      h[c.health] = (h[c.health] || 0) + 1;
+      s[c.sync] = (s[c.sync] || 0) + 1;
+    });
+
     var upSec = Math.floor((Date.now() - new Date(d.startedAt).getTime()) / 1000);
-    var upStr = upSec < 60
-      ? upSec + 's'
-      : upSec < 3600
-        ? Math.floor(upSec / 60) + 'm'
-        : Math.floor(upSec / 3600) + 'h ' + Math.floor((upSec % 3600) / 60) + 'm';
+    var upStr = upSec < 60 ? upSec + 's'
+      : upSec < 3600 ? Math.floor(upSec / 60) + 'm'
+      : Math.floor(upSec / 3600) + 'h ' + Math.floor((upSec % 3600) / 60) + 'm';
+
+    function part(n, color, label) {
+      if (!n) return '';
+      return '<span class="' + color + '">' + n + ' ' + label + '</span>';
+    }
+
+    var healthSplit = [
+      part(h.healthy, 'green', 'Healthy'),
+      part(h.degraded, 'red', 'Degraded'),
+      part(h.progressing, 'yellow', 'Progressing'),
+      part(h.unknown, 'muted', 'Unknown')
+    ].filter(Boolean).join('') || '<span class="muted">—</span>';
+
+    var syncSplit = [
+      part(s.synced, 'green', 'Synced'),
+      part(s.outdated, 'orange', 'OutOfSync'),
+      part(s.updating, 'blue', 'Updating'),
+      part(s.failed, 'red', 'Failed')
+    ].filter(Boolean).join('') || '<span class="muted">—</span>';
 
     var html = '';
-    html += '<div class="card"><div class="lbl">Status</div>'
-          + '<div class="val ' + (busy ? 'yellow' : 'green') + '">' + (busy ? 'Checking…' : 'Idle') + '</div></div>';
-    html += '<div class="card"><div class="lbl">Containers</div>'
-          + '<div class="val blue">' + d.containers.length + '</div></div>';
-    html += '<div class="card"><div class="lbl">Last Check</div>'
-          + '<div class="val">' + esc(timeAgo(d.lastCheckAt)) + '</div></div>';
-    html += '<div class="card"><div class="lbl">Next Check</div>'
-          + '<div class="val">' + esc(fmtTime(d.nextCheckAt)) + '</div></div>';
-    html += '<div class="card"><div class="lbl">Updates Found</div>'
-          + '<div class="val ' + (d.recentUpdates.length ? 'orange' : 'muted') + '">' + d.recentUpdates.length + '</div></div>';
-    html += '<div class="card"><div class="lbl">Uptime</div>'
-          + '<div class="val muted">' + esc(upStr) + '</div></div>';
+    html += '<div class="card"><div class="lbl">Components</div><div class="val blue">' + cs.length + '</div></div>';
+    html += '<div class="card"><div class="lbl">Health</div><div class="split">' + healthSplit + '</div></div>';
+    html += '<div class="card"><div class="lbl">Sync</div><div class="split">' + syncSplit + '</div></div>';
+    html += '<div class="card"><div class="lbl">Last Check</div><div class="val">' + esc(timeAgo(d.lastCheckAt)) + '</div></div>';
+    html += '<div class="card"><div class="lbl">Next Check</div><div class="val">' + esc(fmtTime(d.nextCheckAt)) + '</div></div>';
+    html += '<div class="card"><div class="lbl">Uptime</div><div class="val muted">' + esc(upStr) + '</div></div>';
     setInner('stat-cards', html);
   }
+
+  /* ── Config ── */
 
   function renderConfig(cfg) {
     if (!cfg) return;
     var rows = [
-      ['Runtime',       badge(cfg.runtime, cfg.runtime === 'kubernetes' ? 'blue' : 'purple')],
+      ['Runtime', badge(cfg.runtime, cfg.runtime === 'kubernetes' ? 'blue' : 'purple')],
       ['Check Interval', esc(fmtMs(cfg.intervalMs))],
       ['Update Policy', badge(cfg.policy, 'orange')],
-      ['Auto Update',   cfg.autoUpdate ? badge('enabled', 'green') : badge('disabled', 'muted')],
-      ['Labeled Only',  cfg.labeledOnly
+      ['Auto Update', cfg.autoUpdate ? badge('enabled', 'green') : badge('disabled', 'muted')],
+      ['Labeled Only', cfg.labeledOnly
         ? badge('yes', 'blue') + '&nbsp; <span class="mono">' + esc(cfg.label) + '</span>'
-        : badge('no — all containers', 'muted')],
+        : badge('no — all containers', 'muted')]
     ];
     if (cfg.runtime === 'kubernetes' && cfg.namespaces && cfg.namespaces.length) {
       rows.push(['Namespaces', cfg.namespaces.map(function (n) { return badge(n, 'blue'); }).join(' ')]);
@@ -239,77 +320,152 @@
       }).join(' ')]);
     }
     rows.push(['Webhook', cfg.webhookEnabled ? badge(cfg.webhookProvider || 'generic', 'green') : badge('disabled', 'muted')]);
-    rows.push(['GitOps',  cfg.gitopsEnabled  ? badge('enabled', 'green') : badge('disabled', 'muted')]);
-    rows.push(['AWS ECR', cfg.ecrEnabled     ? badge('enabled', 'green') : badge('disabled', 'muted')]);
+    rows.push(['GitOps', cfg.gitopsEnabled ? badge('enabled', 'green') : badge('disabled', 'muted')]);
+    rows.push(['AWS ECR', cfg.ecrEnabled ? badge('enabled', 'green') : badge('disabled', 'muted')]);
 
     setInner('cfg-grid', rows.map(function (r) {
       return '<div class="cfg"><span class="k">' + r[0] + '</span><span class="v">' + r[1] + '</span></div>';
     }).join(''));
   }
 
-  function renderContainers(containers, runtime) {
+  /* ── Components (ArgoCD-style cards) ── */
+
+  function chip(dim, key, label, color, n) {
+    var active = filter[dim] === key;
+    return '<span class="chip ' + color + (active ? ' active' : '') + '" data-dim="' + dim + '" data-key="' + key + '">'
+      + esc(label) + ' <span class="n">' + n + '</span></span>';
+  }
+
+  function renderToolbar(containers) {
+    var h = { healthy: 0, degraded: 0, progressing: 0, unknown: 0 };
+    var s = { synced: 0, outdated: 0, updating: 0, failed: 0 };
+    containers.forEach(function (c) {
+      h[c.health] = (h[c.health] || 0) + 1;
+      s[c.sync] = (s[c.sync] || 0) + 1;
+    });
+
+    var html = '<input id="comp-search" type="text" placeholder="Filter by name or image…" value="' + esc(filter.q) + '">';
+    html += '<span class="spacer"></span>';
+    if (h.healthy)     html += chip('health', 'healthy', 'Healthy', 'green', h.healthy);
+    if (h.degraded)    html += chip('health', 'degraded', 'Degraded', 'red', h.degraded);
+    if (h.progressing) html += chip('health', 'progressing', 'Progressing', 'yellow', h.progressing);
+    if (s.outdated)    html += chip('sync', 'outdated', 'OutOfSync', 'orange', s.outdated);
+    if (s.failed)      html += chip('sync', 'failed', 'Failed', 'red', s.failed);
+    setInner('toolbar', html);
+
+    var search = document.getElementById('comp-search');
+    if (search) {
+      search.oninput = function () { filter.q = search.value; renderComponents(LAST); search.focus(); };
+    }
+    var chips = document.querySelectorAll('#toolbar .chip');
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].onclick = function () {
+        var dim = this.getAttribute('data-dim');
+        var key = this.getAttribute('data-key');
+        filter[dim] = filter[dim] === key ? null : key;
+        renderComponents(LAST);
+      };
+    }
+  }
+
+  function passesFilter(c) {
+    if (filter.health && c.health !== filter.health) return false;
+    if (filter.sync && c.sync !== filter.sync) return false;
+    if (filter.q) {
+      var q = filter.q.toLowerCase();
+      if ((c.name || '').toLowerCase().indexOf(q) === -1 &&
+          (c.image || '').toLowerCase().indexOf(q) === -1) return false;
+    }
+    return true;
+  }
+
+  function componentCard(c, isK8s) {
+    var hm = healthMeta(c.health);
+    var sm = syncMeta(c.sync);
+
+    var sub = '';
+    if (isK8s) {
+      var bits = [];
+      if (c.namespace) bits.push(c.namespace);
+      if (c.workloadKind && c.workloadName) bits.push(c.workloadKind + '/' + c.workloadName);
+      else if (c.containerName) bits.push(c.containerName);
+      sub = bits.join(' · ');
+    } else if (c.containerName && c.containerName !== c.name) {
+      sub = c.containerName;
+    }
+
+    var html = '<div class="comp h-' + esc(c.health) + '">';
+    html += '<div class="comp-top">';
+    html += '<div class="comp-name"><span class="dot ' + esc(c.health) + '"></span><span class="nm" title="' + esc(c.name) + '">' + esc(c.name) + '</span></div>';
+    if (isK8s && c.workloadKind) html += badge(c.workloadKind, 'muted');
+    html += '</div>';
+    if (sub) html += '<div class="comp-sub" title="' + esc(sub) + '">' + esc(sub) + '</div>';
+
+    html += '<div class="pills">';
+    html += badge(hm.label, hm.color);
+    html += badge(sm.label, sm.color);
+    html += '</div>';
+
+    html += '<div class="comp-img" title="' + esc(c.image) + '">' + esc(c.image) + '</div>';
+
+    if (c.sync === 'outdated' && c.availableTag) {
+      html += '<div class="tagflow"><span style="color:var(--muted)">' + esc(c.currentTag) + '</span>'
+        + '<span class="arrow">&#x2192;</span><strong style="color:var(--orange)">' + esc(c.availableTag) + '</strong>';
+      if (c.updateType) html += ' ' + fmtUpdateType(c.updateType);
+      html += '</div>';
+    }
+
+    if (c.healthReason) {
+      html += '<div style="margin-top:7px;font-size:11px;color:var(--muted)">' + esc(c.healthReason) + '</div>';
+    }
+
+    html += '<div class="meta">';
+    html += badge(c.policy, 'orange');
+    html += c.autoUpdate ? badge('auto-update', 'green') : badge('manual', 'muted');
+    var g = c.gitops || {};
+    if (g.scope === 'per-container') html += badge('gitops: per-container', 'purple');
+    else if (g.scope === 'global')   html += badge('gitops: global', 'blue');
+    html += '</div>';
+
+    if (c.sync === 'failed' && c.lastError) {
+      var e = c.lastError.length > 140 ? c.lastError.substring(0, 140) + '…' : c.lastError;
+      html += '<div class="comp-err" title="' + esc(c.lastError) + '">' + esc(e) + '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  function renderComponents(d) {
+    if (!d) return;
+    var containers = d.containers || [];
+    var isK8s = d.config && d.config.runtime === 'kubernetes';
     setInner('cnt-containers', String(containers.length));
+    renderToolbar(containers);
+
     if (!containers.length) {
-      setInner('containers-wrap', '<div class="empty">No containers currently monitored</div>');
+      setInner('containers-wrap', '<div class="empty">No components currently monitored</div>');
       return;
     }
 
-    var isK8s = runtime === 'kubernetes';
-    var head = '<thead><tr><th>Name</th>';
-    if (isK8s) head += '<th>Namespace</th><th>Workload</th>';
-    head += '<th>Image</th><th>Policy</th><th>Auto Update</th><th>GitOps</th></tr></thead>';
+    // Sort: Degraded first, then OutOfSync/Failed, then by name — surface problems.
+    var healthRank = { degraded: 0, progressing: 1, unknown: 2, healthy: 3 };
+    var shown = containers.filter(passesFilter).slice().sort(function (a, b) {
+      var hr = (healthRank[a.health] - healthRank[b.health]);
+      if (hr !== 0) return hr;
+      return (a.name || '').localeCompare(b.name || '');
+    });
 
-    var rows = containers.map(function (c) {
-      var tr = '<tr><td><strong>' + esc(c.name) + '</strong>';
-      if (c.containerName && c.containerName !== c.name) {
-        tr += '<br><span class="mono" style="color:var(--muted);font-size:11px">' + esc(c.containerName) + '</span>';
-      }
-      tr += '</td>';
+    if (!shown.length) {
+      setInner('containers-wrap', '<div class="empty">No components match the current filter</div>');
+      return;
+    }
 
-      if (isK8s) {
-        tr += '<td>' + (c.namespace ? badge(c.namespace, 'blue') : '<span style="color:var(--muted)">—</span>') + '</td>';
-        tr += '<td>';
-        if (c.workloadKind && c.workloadName) {
-          tr += badge(c.workloadKind, 'muted') + ' <span class="mono" style="font-size:12px">' + esc(c.workloadName) + '</span>';
-        } else {
-          tr += '<span style="color:var(--muted)">—</span>';
-        }
-        tr += '</td>';
-      }
-
-      tr += '<td class="mono" style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(c.image) + '">'
-          + esc(c.image) + '</td>';
-      tr += '<td>' + badge(c.policy, 'orange') + '</td>';
-      tr += '<td>' + (c.autoUpdate ? badge('enabled', 'green') : badge('disabled', 'muted')) + '</td>';
-      tr += '<td>';
-      var g = c.gitops || {};
-      if (g.scope === 'none') {
-        tr += badge('off', 'muted');
-      } else {
-        tr += badge(g.scope === 'per-container' ? 'per-container' : 'global', g.scope === 'per-container' ? 'purple' : 'blue');
-        if (g.hasPerContainerCommands) tr += ' ' + badge('custom cmds', 'orange');
-        if (g.repoUrl) {
-          var shortUrl = g.repoUrl.replace(/^https?:\/\//, '').substring(0, 44);
-          tr += '<br><span class="mono" style="font-size:11px;color:var(--muted)" title="' + esc(g.repoUrl) + '">' + esc(shortUrl) + '</span>';
-        }
-        if (g.branch) {
-          tr += '<br><span style="font-size:11px;color:var(--muted)">branch: <span class="mono">' + esc(g.branch) + '</span></span>';
-        }
-        if (g.pollIntervalMs) {
-          tr += '<span style="font-size:11px;color:var(--muted)"> &bull; poll: ' + esc(fmtMs(g.pollIntervalMs)) + '</span>';
-        }
-        if (g.watchPaths && g.watchPaths.length) {
-          var pathStr = g.watchPaths.slice(0, 3).map(function (p) { return esc(p); }).join(', ');
-          if (g.watchPaths.length > 3) pathStr += ', +' + (g.watchPaths.length - 3) + ' more';
-          tr += '<br><span style="font-size:11px;color:var(--muted)">watch: <span class="mono">' + pathStr + '</span></span>';
-        }
-      }
-      tr += '</td></tr>';
-      return tr;
-    }).join('');
-
-    setInner('containers-wrap', '<table>' + head + '<tbody>' + rows + '</tbody></table>');
+    var cards = shown.map(function (c) { return componentCard(c, isK8s); }).join('');
+    setInner('containers-wrap', '<div class="components">' + cards + '</div>');
   }
+
+  /* ── Recent updates ── */
 
   function renderUpdates(updates) {
     setInner('cnt-updates', String(updates.length));
@@ -317,28 +473,18 @@
       setInner('updates-wrap', '<div class="empty">No updates recorded yet</div>');
       return;
     }
-
-    var head = '<thead><tr><th>Time</th><th>Container</th><th>Change</th><th>Type</th><th>Action</th><th>Result</th></tr></thead>';
+    var head = '<thead><tr><th>Time</th><th>Component</th><th>Change</th><th>Type</th><th>Action</th><th>Result</th></tr></thead>';
     var rows = updates.map(function (u) {
       var actionBadge, resultBadge;
-      if (!u.autoUpdated) {
-        actionBadge = badge('skipped', 'muted');
-        resultBadge = badge('available', 'yellow');
-      } else if (u.success) {
-        actionBadge = badge('auto-update', 'green');
-        resultBadge = badge('applied', 'green');
-      } else {
-        actionBadge = badge('auto-update', 'red');
-        resultBadge = badge('failed', 'red');
-      }
+      if (!u.autoUpdated) { actionBadge = badge('skipped', 'muted'); resultBadge = badge('available', 'yellow'); }
+      else if (u.success) { actionBadge = badge('auto-update', 'green'); resultBadge = badge('applied', 'green'); }
+      else { actionBadge = badge('auto-update', 'red'); resultBadge = badge('failed', 'red'); }
 
       var tr = '<tr>';
       tr += '<td class="ts" title="' + esc(fmtDateTime(u.timestamp)) + '">' + esc(timeAgo(u.timestamp)) + '</td>';
       tr += '<td><strong>' + esc(u.containerName) + '</strong></td>';
-      tr += '<td class="mono">'
-          + '<span style="color:var(--muted)">' + esc(u.fromTag) + '</span>'
-          + '<span class="arrow">&#x2192;</span>'
-          + '<strong>' + esc(u.toTag) + '</strong></td>';
+      tr += '<td class="mono"><span style="color:var(--muted)">' + esc(u.fromTag) + '</span>'
+          + '<span class="arrow">&#x2192;</span><strong>' + esc(u.toTag) + '</strong></td>';
       tr += '<td>' + fmtUpdateType(u.updateType) + '</td>';
       tr += '<td>' + actionBadge + '</td>';
       tr += '<td>' + resultBadge;
@@ -348,22 +494,21 @@
       }
       if (u.labelValues && Object.keys(u.labelValues).length) {
         Object.keys(u.labelValues).forEach(function (k) {
-          var shortKey = k.split('.').pop();
           tr += '<br><span style="font-size:11px;color:var(--muted)">'
-              + esc(shortKey) + ': <span class="mono">' + esc(u.labelValues[k]) + '</span></span>';
+              + esc(k.split('.').pop()) + ': <span class="mono">' + esc(u.labelValues[k]) + '</span></span>';
         });
       }
       tr += '</td></tr>';
       return tr;
     }).join('');
-
     setInner('updates-wrap', '<table>' + head + '<tbody>' + rows + '</tbody></table>');
   }
 
   function render(d) {
+    LAST = d;
     renderCards(d);
+    renderComponents(d);
     renderConfig(d.config);
-    renderContainers(d.containers || [], d.config && d.config.runtime);
     renderUpdates(d.recentUpdates || []);
   }
 
@@ -372,10 +517,7 @@
   function fetchStatus() {
     fetch('/api/status')
       .then(function (r) { return r.json(); })
-      .then(function (d) {
-        render(d);
-        countdown = REFRESH;
-      })
+      .then(function (d) { render(d); countdown = REFRESH; })
       .catch(function () {
         var dot = document.getElementById('status-dot');
         var txt = document.getElementById('status-text');
@@ -388,10 +530,7 @@
     countdown--;
     var el = document.getElementById('countdown');
     if (el) el.textContent = String(countdown);
-    if (countdown <= 0) {
-      countdown = REFRESH;
-      fetchStatus();
-    }
+    if (countdown <= 0) { countdown = REFRESH; fetchStatus(); }
   }
 
   fetchStatus();

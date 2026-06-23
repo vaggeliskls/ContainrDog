@@ -54,6 +54,16 @@ services:
       # Set to false to only detect and log updates without taking action
       - AUTO_UPDATE=true
 
+      # Update verification & rollback (optional - all shown with their defaults)
+      # After an auto-update, verify the new version is healthy; if not, roll
+      # back to the previous image and send a FAILURE notification instead of a
+      # false success + repeated re-update loop.
+      # - HEALTH_CHECK_ENABLED=true       # Verify health after updating
+      # - HEALTH_CHECK_TIMEOUT=30         # Seconds to wait for healthy
+      # - HEALTH_CHECK_INTERVAL=3         # Seconds between health polls
+      # - ROLLBACK_ON_FAILURE=true        # Restore previous image on failure
+      # - UPDATE_FAILURE_COOLDOWN=1h      # Don't retry the same failed target for this long (0 to disable)
+
       # Custom socket path (optional, auto-detected)
       # - SOCKET_PATH=/var/run/docker.sock
 

@@ -35,6 +35,18 @@ All configuration is via environment variables.
 |----------|---------|-------------|
 | `GLOB_PATTERN` | — | Wildcard pattern for `glob` policy |
 
+## Update Verification & Rollback
+
+After an auto-update, ContainrDog verifies the new version actually comes up healthy before reporting success. If it doesn't, the previous image is restored and a **failure** notification is sent — instead of a false "success" and a re-update loop.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HEALTH_CHECK_ENABLED` | `true` | Verify the new container/rollout is healthy after an update before declaring success |
+| `HEALTH_CHECK_TIMEOUT` | `30` | Seconds to wait for the new version to become healthy. Docker: honours the image `HEALTHCHECK` if present, otherwise requires the container to stay running (no crash/restart loop). Kubernetes: waits for the rollout to become fully ready |
+| `HEALTH_CHECK_INTERVAL` | `3` | Seconds between health polls while waiting |
+| `ROLLBACK_ON_FAILURE` | `true` | Restore the previous image when the health check fails. Docker rolls back by image ID (survives digest-only updates); Kubernetes re-patches the prior image |
+| `UPDATE_FAILURE_COOLDOWN` | `1h` | After a failed update, don't re-attempt the **same** target image for this long (`h`/`m`/`s`). Stops the repeated update/notification loop. A newer target is still attempted; set to `0` to disable |
+
 ## Commands (Hooks)
 
 | Variable | Default | Description |
@@ -81,14 +93,21 @@ All configuration is via environment variables.
 | `REGISTRY_CREDENTIALS` | — | JSON credentials (alternative to config.json) |
 | `CREDENTIALS_FILE` | — | Path to a JSON credentials file |
 
-## Dashboard UI
+## HTTP API & Dashboard UI
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `UI_ENABLED` | `false` | Enable the web dashboard |
-| `UI_PORT` | `8080` | Port the dashboard listens on |
+| `HTTP_API` | `true` | Run the built-in HTTP server (status + GitOps triggers). Set `false` to disable it entirely |
+| `UI_ENABLED` | `false` | Serve the web dashboard page at `/`. Does **not** gate the HTTP API |
+| `UI_PORT` | `8080` | Port the HTTP server listens on (alias: `HTTP_PORT`) |
 
-When enabled, the dashboard is available at `http://<host>:<UI_PORT>/` and exposes a read-only JSON API at `/api/status`.
+The HTTP server runs by default and always exposes:
+- `GET /api/status` — read-only JSON status
+- `POST /api/gitops/trigger[/<container>]` — on-demand GitOps triggers (see [GitOps → HTTP Triggers](gitops.md#http-triggers))
+
+`UI_ENABLED=true` additionally serves the dashboard page at `http://<host>:<UI_PORT>/`. With the UI disabled, `/` returns 404 but the API endpoints still work.
+
+The dashboard presents monitored workloads ArgoCD-style: one card per component with a **Health** status (Healthy / Degraded / Progressing / Unknown) and a **Sync** status (Synced / OutOfSync / Updating / Failed), plus current→available image tags. Cards are sorted problems-first and can be filtered by name, health, or sync.
 
 > **Docker**: publish the port with `-p 8080:8080` (or `ports: ["8080:8080"]` in Compose).
 >

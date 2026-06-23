@@ -157,3 +157,51 @@ services:
       - containrdog.gitops-watch-paths=["services/web/**"]
       - containrdog.gitops-commands=["docker-compose restart web"]
 ```
+
+## HTTP Triggers
+
+Besides the poll interval, you can trigger GitOps on demand over HTTP — useful as a CI/CD deploy hook ("I pushed, go deploy now"). These are served by the built-in HTTP API, which **runs by default** on port `8080` (override with `UI_PORT` or `HTTP_PORT`). `UI_ENABLED` is **not** required — it only controls the dashboard page. Set `HTTP_API=false` to disable the server entirely.
+
+> ⚠️ These endpoints run your configured GitOps commands and are **unauthenticated**. Only expose the UI port on a trusted network.
+
+| Endpoint | Scope |
+|----------|-------|
+| `POST /api/gitops/trigger` | Global GitOps (all containers using the global repo) |
+| `POST /api/gitops/trigger/<container>` | A single container/deployment by name |
+| `POST /api/gitops/trigger?container=<name>` | Same, for Kubernetes names containing `/` (e.g. `web/app`) |
+
+**Query parameters:**
+
+| Param | Default | Description |
+|-------|---------|-------------|
+| `mode` | `run` | `run` = execute the configured commands now against the current working tree (no git fetch). `check` = fetch + diff and run only if matching changes are found. |
+| `force` | `false` | Only with `mode=check`: pull latest and run **even when no matching changes are found**. |
+
+**Examples:**
+```bash
+# Deploy-hook style: run global commands now
+curl -X POST http://localhost:8080/api/gitops/trigger
+
+# Check the repo now; run only if there are new matching commits
+curl -X POST "http://localhost:8080/api/gitops/trigger?mode=check"
+
+# Force one deployment to pull latest and re-run, even with no changes
+curl -X POST "http://localhost:8080/api/gitops/trigger/web?mode=check&force=true"
+
+# Kubernetes workload/container name with a slash
+curl -X POST "http://localhost:8080/api/gitops/trigger?container=web/app"
+```
+
+**Response** is JSON describing the outcome:
+```json
+{ "scope": "container", "mode": "run", "forced": false, "triggered": true, "code": "ok", "affected": ["web"] }
+```
+
+| `code` | HTTP status | Meaning |
+|--------|-------------|---------|
+| `ok` | 200 | Commands ran |
+| `noop` | 200 | Valid request, nothing to do (no changes / no eligible containers) |
+| `busy` | 409 | A GitOps run for this scope is already executing |
+| `disabled` | 409 | GitOps is not enabled for this scope |
+| `not_found` | 404 | Named container is not currently monitored |
+| `error` | 500 | An error occurred (see `message`) |

@@ -39,9 +39,13 @@ class ContainerUpdater {
       logger.info('🐾 Starting ContainrDog...');
       this.logConfiguration();
 
-      if (process.env.UI_ENABLED === 'true') {
-        const uiPort = parseInt(process.env.UI_PORT || '8080', 10);
-        new ApiServer(uiPort).start();
+      // The HTTP API (status + GitOps triggers) always runs; UI_ENABLED only
+      // controls whether the dashboard HTML page is served. Set HTTP_API=false
+      // to disable the server entirely.
+      if (process.env.HTTP_API !== 'false') {
+        const apiPort = parseInt(process.env.UI_PORT || process.env.HTTP_PORT || '8080', 10);
+        const uiEnabled = process.env.UI_ENABLED === 'true';
+        new ApiServer(apiPort, this.monitorService, uiEnabled).start();
       }
 
       if (this.ecrAuthService) {

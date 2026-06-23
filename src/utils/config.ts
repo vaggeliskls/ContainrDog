@@ -1,4 +1,4 @@
-import { Config, RegistryCredentials, UpdatePolicy, WebhookConfig, WebhookProvider, GitOpsConfig, GitAuthType, ECRConfig, ContainerRuntime, KubernetesConfig } from '../types';
+import { Config, RegistryCredentials, UpdatePolicy, WebhookConfig, WebhookProvider, GitOpsConfig, GitAuthType, ECRConfig, ContainerRuntime, KubernetesConfig, UpdateVerificationConfig } from '../types';
 import { readFileSync, existsSync } from 'fs';
 import { parseJSONLabel } from './label-parser';
 
@@ -60,6 +60,9 @@ export class ConfigManager {
       ? parseInt(process.env.LABEL_FETCH_TIMEOUT, 10) * 1000
       : 30_000;
 
+    // Post-update health verification, rollback, and failure cooldown
+    const update = this.parseUpdateVerificationConfig();
+
     // Webhook configuration
     const webhook = this.parseWebhookConfig();
 
@@ -91,6 +94,7 @@ export class ConfigManager {
       autoUpdate,
       imageLabelKeys,
       labelFetchTimeout,
+      update,
       webhook,
       gitops,
       ecr,
@@ -295,6 +299,37 @@ export class ConfigManager {
       console.error('Failed to parse POST_UPDATE_COMMANDS:', error);
       return undefined;
     }
+  }
+
+  private parseUpdateVerificationConfig(): UpdateVerificationConfig {
+    // Verify the new version is healthy after an auto-update (default: on).
+    const healthCheckEnabled = process.env.HEALTH_CHECK_ENABLED !== 'false';
+
+    // How long to wait for the new container/rollout to become healthy.
+    // Given in seconds (e.g. HEALTH_CHECK_TIMEOUT=60); default 30s.
+    const healthCheckTimeout = process.env.HEALTH_CHECK_TIMEOUT
+      ? parseInt(process.env.HEALTH_CHECK_TIMEOUT, 10) * 1000
+      : 30_000;
+
+    // Poll cadence while waiting for health. Seconds; default 3s.
+    const healthCheckInterval = process.env.HEALTH_CHECK_INTERVAL
+      ? parseInt(process.env.HEALTH_CHECK_INTERVAL, 10) * 1000
+      : 3_000;
+
+    // Restore the previous image when the health check fails (default: on).
+    const rollbackOnFailure = process.env.ROLLBACK_ON_FAILURE !== 'false';
+
+    // After a failed update, don't re-attempt the same target image for this
+    // long — stops the update/notify spam loop. Supports h/m/s; default 1h.
+    const failureCooldown = this.parseECRInterval(process.env.UPDATE_FAILURE_COOLDOWN || '1h');
+
+    return {
+      healthCheckEnabled,
+      healthCheckTimeout,
+      healthCheckInterval,
+      rollbackOnFailure,
+      failureCooldown,
+    };
   }
 
   private parseWebhookConfig(): WebhookConfig | undefined {

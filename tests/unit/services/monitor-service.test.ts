@@ -116,3 +116,95 @@ describe('MonitorService failure cooldown', () => {
     baseConfig.update.failureCooldown = 3_600_000; // restore for other tests
   });
 });
+
+function clientWithContainers(containers: ContainerInfo[]): IRuntimeClient {
+  return {
+    ping: vi.fn().mockResolvedValue(true),
+    getRunningContainers: vi.fn().mockResolvedValue(containers),
+    getImageDigest: vi.fn().mockResolvedValue(undefined),
+    updateContainerImage: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+function gitopsContainer(overrides: Partial<ContainerInfo> = {}): ContainerInfo {
+  return {
+    id: 'cid-1',
+    name: 'web',
+    image: 'nginx:1.0.0',
+    imageId: 'sha256:x',
+    labels: {},
+    created: 0,
+    gitopsEnabled: true,
+    ...overrides,
+  };
+}
+
+describe('MonitorService GitOps triggers', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns not_found for an unknown container', async () => {
+    const monitor = new MonitorService(clientWithContainers([])) as any;
+    const res = await monitor.triggerContainerGitOps('does-not-exist', 'run', false);
+    expect(res.code).toBe('not_found');
+    expect(res.triggered).toBe(false);
+  });
+
+  it('returns disabled when GitOps is off for the container', async () => {
+    const monitor = new MonitorService(clientWithContainers([gitopsContainer({ gitopsEnabled: false })])) as any;
+    const res = await monitor.triggerContainerGitOps('web', 'run', false);
+    expect(res.code).toBe('disabled');
+  });
+
+  it('runs container commands and reports the container as affected (run mode)', async () => {
+    const monitor = new MonitorService(clientWithContainers([gitopsContainer()])) as any;
+    monitor.executeGitOpsCommands = vi.fn().mockResolvedValue(undefined);
+
+    const res = await monitor.triggerContainerGitOps('web', 'run', false);
+
+    expect(monitor.executeGitOpsCommands).toHaveBeenCalledTimes(1);
+    expect(res).toMatchObject({ code: 'ok', triggered: true, affected: ['web'], scope: 'container' });
+  });
+
+  it('returns busy when the container is already executing GitOps', async () => {
+    const monitor = new MonitorService(clientWithContainers([gitopsContainer()])) as any;
+    monitor.executeGitOpsCommands = vi.fn().mockResolvedValue(undefined);
+    monitor.gitopsExecuting.add('cid-1'); // simulate in-flight execution
+
+    const res = await monitor.triggerContainerGitOps('web', 'run', false);
+
+    expect(res.code).toBe('busy');
+    expect(monitor.executeGitOpsCommands).not.toHaveBeenCalled();
+  });
+
+  it('returns disabled for a global trigger when global GitOps is off', async () => {
+    const monitor = new MonitorService(clientWithContainers([gitopsContainer()])) as any;
+    // gitService is undefined because baseConfig.gitops is undefined
+    const res = await monitor.triggerGlobalGitOps('run', false);
+    expect(res.code).toBe('disabled');
+  });
+
+  it('dispatches global commands to all consumers (run mode)', async () => {
+    const monitor = new MonitorService(clientWithContainers([gitopsContainer()])) as any;
+    monitor.gitService = {}; // pretend global GitOps is enabled
+    monitor.dispatchGlobalGitOps = vi.fn().mockResolvedValue(undefined);
+
+    const res = await monitor.triggerGlobalGitOps('run', false);
+
+    expect(monitor.dispatchGlobalGitOps).toHaveBeenCalledTimes(1);
+    expect(res).toMatchObject({ code: 'ok', triggered: true, affected: ['web'], scope: 'global' });
+  });
+
+  it('reports noop for a global run with no consumers', async () => {
+    const monitor = new MonitorService(clientWithContainers([])) as any;
+    monitor.gitService = {};
+    monitor.dispatchGlobalGitOps = vi.fn().mockResolvedValue(undefined);
+
+    const res = await monitor.triggerGlobalGitOps('run', false);
+
+    expect(res.code).toBe('noop');
+    expect(res.triggered).toBe(false);
+    expect(monitor.dispatchGlobalGitOps).not.toHaveBeenCalled();
+  });
+});

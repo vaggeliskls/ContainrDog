@@ -51,3 +51,23 @@ describe('DockerClient.evaluateHealth', () => {
     expect(client.evaluateHealth(inspect({ Running: true, Status: 'running' }, 0))).toBe('pending-no-healthcheck');
   });
 });
+
+describe('DockerClient.deriveHealth (dashboard)', () => {
+  const client = new DockerClient() as any;
+
+  it('reports healthy for a running container (passing or no healthcheck)', () => {
+    expect(client.deriveHealth(inspect({ Running: true, Status: 'running', Health: { Status: 'healthy' } })).health).toBe('healthy');
+    expect(client.deriveHealth(inspect({ Running: true, Status: 'running' })).health).toBe('healthy');
+  });
+
+  it('reports degraded for an unhealthy healthcheck, restart loop, or exit', () => {
+    expect(client.deriveHealth(inspect({ Running: true, Status: 'running', Health: { Status: 'unhealthy' } })).health).toBe('degraded');
+    expect(client.deriveHealth(inspect({ Running: false, Status: 'running', Restarting: true })).health).toBe('degraded');
+    expect(client.deriveHealth(inspect({ Running: false, Status: 'exited' })).health).toBe('degraded');
+    expect(client.deriveHealth(inspect({ Running: true, Status: 'running' }, 5)).health).toBe('degraded');
+  });
+
+  it('reports progressing while a healthcheck is starting', () => {
+    expect(client.deriveHealth(inspect({ Running: true, Status: 'running', Health: { Status: 'starting' } })).health).toBe('progressing');
+  });
+});

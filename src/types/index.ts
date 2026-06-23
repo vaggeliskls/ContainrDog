@@ -25,6 +25,22 @@ export enum GitAuthType {
   NONE = 'none',
 }
 
+// Live health of a monitored component, ArgoCD-style.
+export enum ComponentHealth {
+  HEALTHY = 'healthy', // running / rollout ready
+  DEGRADED = 'degraded', // crashed, restart loop, unhealthy healthcheck, image pull error
+  PROGRESSING = 'progressing', // starting up / rollout in progress
+  UNKNOWN = 'unknown', // could not be determined
+}
+
+// Whether a component's image is at the latest the policy would pick.
+export enum SyncStatus {
+  SYNCED = 'synced', // no update available
+  OUTDATED = 'outdated', // a newer image is available (update-available)
+  UPDATING = 'updating', // an auto-update is in progress
+  FAILED = 'failed', // the last auto-update attempt failed
+}
+
 export interface WebhookConfig {
   enabled: boolean;
   provider: WebhookProvider;
@@ -133,6 +149,10 @@ export interface ContainerInfo {
   workloadKind?: string; // 'Deployment', 'StatefulSet', 'DaemonSet'
   workloadName?: string; // Name of the owning workload
   containerName?: string; // Name of the container within the pod
+  // Live health derived by the runtime client during discovery (optional;
+  // runtimes that can't determine it leave it unset → treated as unknown).
+  health?: ComponentHealth;
+  healthReason?: string; // short human-readable reason, e.g. 'CrashLoopBackOff'
 }
 
 export interface ImageInfo {

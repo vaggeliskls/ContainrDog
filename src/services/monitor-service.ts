@@ -8,7 +8,7 @@ import { GitService } from './git-service';
 import { logger } from '../utils/logger';
 import { getConfig } from '../utils/config';
 import { extractRepoName } from '../utils/label-parser';
-import { ImageUpdateInfo, GitChangeInfo, ContainerInfo, RegistryCredentials, GitAuthType, GitOpsConfig } from '../types';
+import { ImageUpdateInfo, GitChangeInfo, ContainerInfo, RegistryCredentials, GitAuthType, GitOpsConfig, SyncStatus } from '../types';
 import { StatusStore } from './status-store';
 import { ImageParser } from '../utils/image-parser';
 import { minimatch } from 'minimatch';
@@ -17,6 +17,26 @@ interface SubscriberState {
   containerId: string;
   lastCommit: string | null;
   lastCheck: number;
+}
+
+// Manual GitOps trigger (HTTP) types.
+//   run   = execute the configured commands now against the current working
+//           tree (no git fetch) — deploy-hook style.
+//   check = fetch + diff and run only if matching changes are found; with
+//           force=true, pull latest and run even when nothing changed.
+export type GitOpsTriggerMode = 'run' | 'check';
+
+export type GitOpsTriggerCode = 'ok' | 'noop' | 'busy' | 'disabled' | 'not_found' | 'error';
+
+export interface GitOpsTriggerResult {
+  scope: 'global' | 'container';
+  mode: GitOpsTriggerMode;
+  forced: boolean;
+  triggered: boolean; // did commands actually execute
+  code: GitOpsTriggerCode;
+  affected?: string[]; // container names whose commands ran
+  changed?: boolean; // (check mode) were matching git changes detected
+  message?: string; // human-readable detail, esp. when triggered=false
 }
 
 interface SharedRepoState {
@@ -154,6 +174,8 @@ export class MonitorService {
       return;
     }
 
+    // Initial snapshot so the dashboard shows components (and their health)
+    // immediately, before the registry check completes.
     StatusStore.instance.setContainers(containers);
 
     const containerIds = containers.map((c) => c.id).sort().join(',');
@@ -167,6 +189,11 @@ export class MonitorService {
     }
 
     const updates = await this.updateChecker.checkForUpdates(containers);
+
+    // Re-snapshot with the available updates attached so each component's sync
+    // status reflects this check (synced vs outdated).
+    const updateById = new Map(updates.map((u) => [u.container.id, u]));
+    StatusStore.instance.setContainers(containers, updateById);
 
     if (updates.length === 0) {
       if (this.webhookService) {
@@ -218,6 +245,9 @@ export class MonitorService {
         logger.warn(
           `   ⏳ Skipping ${container.name}: update to ${update.availableImage.tag} failed recently; cooling down for ${remainingS}s more`
         );
+        StatusStore.instance.markComponentSync(container.id, SyncStatus.FAILED, {
+          error: `cooling down after a failed update to ${update.availableImage.tag}`,
+        });
         return;
       }
       if (cooldown && (cooldown.targetImage !== targetImage || cooldown.until <= Date.now())) {
@@ -233,8 +263,10 @@ export class MonitorService {
 
       if (autoUpdateEnabled) {
         logger.info(`   Action:    Auto-updating...`);
+        StatusStore.instance.markComponentSync(container.id, SyncStatus.UPDATING);
         await this.autoUpdateContainer(update);
         this.updateFailureCooldowns.delete(container.name); // success clears any cooldown
+        StatusStore.instance.markComponentSync(container.id, SyncStatus.SYNCED);
         StatusStore.instance.recordUpdate({ ...baseEvent, success: true });
       } else {
         logger.info(`   Action:    Skipped (auto-update disabled)`);
@@ -258,10 +290,12 @@ export class MonitorService {
         );
       }
 
+      const errMsg = error instanceof Error ? error.message : String(error);
+      StatusStore.instance.markComponentSync(container.id, SyncStatus.FAILED, { error: errMsg });
       StatusStore.instance.recordUpdate({
         ...baseEvent,
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: errMsg,
       });
     }
   }
@@ -421,72 +455,85 @@ export class MonitorService {
   }
 
   /**
+   * Get or create the SharedRepoState and this container's subscriber for a
+   * per-container GitOps repo. A clone path is derived from
+   * <namespace, repo, branch>, so workloads sharing those values converge on
+   * the same state and reuse one working tree. New subscribers start at the
+   * current HEAD so they don't replay history. Returns null if the repo can't
+   * be initialized.
+   */
+  private async getOrCreateSubscriber(
+    container: ContainerInfo
+  ): Promise<{ state: SharedRepoState; sub: SubscriberState } | null> {
+    const config = getConfig();
+    const clonePath = this.resolveContainerClonePath(container, config.gitops);
+
+    const subscriberAuth = {
+      authType: container.gitopsAuthType || config.gitops?.authType || GitAuthType.NONE,
+      token: container.gitopsToken || config.gitops?.token,
+      sshKeyPath: container.gitopsSshKeyPath || config.gitops?.sshKeyPath,
+    };
+
+    let state = this.sharedRepoStates.get(clonePath);
+    if (!state) {
+      const gitConfig: GitOpsConfig = {
+        enabled: true,
+        repoUrl: container.gitopsRepoUrl!,
+        branch: container.gitopsBranch || 'main',
+        authType: subscriberAuth.authType,
+        token: subscriberAuth.token,
+        sshKeyPath: subscriberAuth.sshKeyPath,
+        pollInterval: container.gitopsPollInterval || 60000,
+        // watchPaths/commands live per-subscriber, not on the shared service.
+        clonePath,
+        shallow: config.gitops?.shallow,
+      };
+
+      const service = new GitService(gitConfig);
+      const initialized = await service.initialize();
+      if (!initialized) {
+        logger.warn(`⚠️  GitOps: Failed to initialize shared repo at ${clonePath} (driven by ${container.name})`);
+        return null;
+      }
+
+      state = { service, subscribers: new Map(), opQueue: Promise.resolve(), auth: subscriberAuth };
+      this.sharedRepoStates.set(clonePath, state);
+      logger.info(`📦 GitOps: Initialized shared repo at ${clonePath}`);
+    }
+
+    let sub = state.subscribers.get(container.id);
+    if (!sub) {
+      // Warn if the new subscriber's credentials differ from the in-effect
+      // ones; the first registrant's auth is what's actually used for fetches.
+      if (
+        state.auth.authType !== subscriberAuth.authType ||
+        state.auth.token !== subscriberAuth.token ||
+        state.auth.sshKeyPath !== subscriberAuth.sshKeyPath
+      ) {
+        logger.warn(
+          `⚠️  GitOps: ${container.name} joined shared repo ${clonePath} with different credentials; ` +
+          `the first registrant's auth (${state.auth.authType}) remains in effect for all fetches.`
+        );
+      }
+      const head = await state.service.getCurrentCommit();
+      sub = { containerId: container.id, lastCommit: head, lastCheck: 0 };
+      state.subscribers.set(container.id, sub);
+      logger.info(`📦 GitOps: ${container.name} subscribed to ${clonePath}`);
+    }
+
+    return { state, sub };
+  }
+
+  /**
    * Check GitOps for a specific container with its own repository
    */
   private async checkContainerGitOps(container: ContainerInfo, now: number): Promise<void> {
     try {
-      const config = getConfig();
-      const clonePath = this.resolveContainerClonePath(container, config.gitops);
+      const ensured = await this.getOrCreateSubscriber(container);
+      if (!ensured) return;
+      const { state, sub } = ensured;
 
-      // 1. Get or create the SharedRepoState for this clone path. A path is
-      //    derived from <namespace, repo, branch>, so workloads sharing those
-      //    values converge on the same state and reuse one working tree.
-      const subscriberAuth = {
-        authType: container.gitopsAuthType || config.gitops?.authType || GitAuthType.NONE,
-        token: container.gitopsToken || config.gitops?.token,
-        sshKeyPath: container.gitopsSshKeyPath || config.gitops?.sshKeyPath,
-      };
-
-      let state = this.sharedRepoStates.get(clonePath);
-      if (!state) {
-        const gitConfig: GitOpsConfig = {
-          enabled: true,
-          repoUrl: container.gitopsRepoUrl!,
-          branch: container.gitopsBranch || 'main',
-          authType: subscriberAuth.authType,
-          token: subscriberAuth.token,
-          sshKeyPath: subscriberAuth.sshKeyPath,
-          pollInterval: container.gitopsPollInterval || 60000,
-          // watchPaths/commands live per-subscriber, not on the shared service.
-          clonePath,
-          shallow: config.gitops?.shallow,
-        };
-
-        const service = new GitService(gitConfig);
-        const initialized = await service.initialize();
-        if (!initialized) {
-          logger.warn(`⚠️  GitOps: Failed to initialize shared repo at ${clonePath} (driven by ${container.name})`);
-          return;
-        }
-
-        state = { service, subscribers: new Map(), opQueue: Promise.resolve(), auth: subscriberAuth };
-        this.sharedRepoStates.set(clonePath, state);
-        logger.info(`📦 GitOps: Initialized shared repo at ${clonePath}`);
-      }
-
-      // 2. Register this container's subscription. New subscribers start at
-      //    the current HEAD so they don't replay history.
-      let sub = state.subscribers.get(container.id);
-      if (!sub) {
-        // Warn if the new subscriber's credentials differ from the in-effect
-        // ones; the first registrant's auth is what's actually used for fetches.
-        if (
-          state.auth.authType !== subscriberAuth.authType ||
-          state.auth.token !== subscriberAuth.token ||
-          state.auth.sshKeyPath !== subscriberAuth.sshKeyPath
-        ) {
-          logger.warn(
-            `⚠️  GitOps: ${container.name} joined shared repo ${clonePath} with different credentials; ` +
-            `the first registrant's auth (${state.auth.authType}) remains in effect for all fetches.`
-          );
-        }
-        const head = await state.service.getCurrentCommit();
-        sub = { containerId: container.id, lastCommit: head, lastCheck: 0 };
-        state.subscribers.set(container.id, sub);
-        logger.info(`📦 GitOps: ${container.name} subscribed to ${clonePath}`);
-      }
-
-      // 3. Per-subscriber poll cadence and re-entrancy guard.
+      // Per-subscriber poll cadence and re-entrancy guard.
       const pollInterval = container.gitopsPollInterval || 60000;
       if (now - sub.lastCheck < pollInterval) return;
 
@@ -519,8 +566,10 @@ export class MonitorService {
   private async runSharedCheckForSubscriber(
     state: SharedRepoState,
     sub: SubscriberState,
-    container: ContainerInfo
-  ): Promise<void> {
+    container: ContainerInfo,
+    force = false
+  ): Promise<boolean> {
+    let ran = false;
     const op = state.opQueue.then(async () => {
       const watchPaths = container.gitopsWatchPaths;
       const isInterval = !watchPaths || watchPaths.length === 0;
@@ -536,10 +585,13 @@ export class MonitorService {
           timestamp: new Date(),
         };
         await this.executeGitOpsCommands(container, change);
+        ran = true;
         return;
       }
 
-      // watchPaths set: only fire on real commits that touch matching files.
+      // watchPaths set: only fire on real commits that touch matching files —
+      // unless force is set (manual trigger), which pulls latest and runs the
+      // commands even when no matching change is found.
       await state.service.fetch();
       const currentHead = await state.service.getRemoteHead();
       if (!currentHead) {
@@ -547,13 +599,14 @@ export class MonitorService {
         return;
       }
 
-      if (sub.lastCommit && sub.lastCommit === currentHead) return; // no new commits for this subscriber
+      const noNewCommits = !!sub.lastCommit && sub.lastCommit === currentHead;
+      if (noNewCommits && !force) return; // no new commits for this subscriber
 
       const previousCommit = sub.lastCommit || `${currentHead}~1`;
-      const changedFiles = await state.service.getDiff(previousCommit, currentHead);
+      const changedFiles = noNewCommits ? [] : await state.service.getDiff(previousCommit, currentHead);
       const relevantFiles = state.service.filterByWatchPaths(changedFiles, watchPaths);
 
-      if (relevantFiles.length === 0) {
+      if (relevantFiles.length === 0 && !force) {
         sub.lastCommit = currentHead; // advance so we don't keep re-checking the same commit
         return;
       }
@@ -562,7 +615,9 @@ export class MonitorService {
       // Idempotent if another subscriber already pulled this cycle.
       await state.service.pull();
 
-      const commitMessage = await state.service.getCommitMessage(currentHead);
+      const commitMessage = noNewCommits
+        ? 'Manual trigger (forced)'
+        : await state.service.getCommitMessage(currentHead);
       const change: GitChangeInfo = {
         changedFiles: relevantFiles,
         previousCommit,
@@ -572,12 +627,18 @@ export class MonitorService {
       };
       sub.lastCommit = currentHead;
 
-      logger.info(`📦 GitOps (${container.name}): ${relevantFiles.length} relevant file(s) changed @ ${currentHead.substring(0, 7)}`);
+      if (relevantFiles.length > 0) {
+        logger.info(`📦 GitOps (${container.name}): ${relevantFiles.length} relevant file(s) changed @ ${currentHead.substring(0, 7)}`);
+      } else {
+        logger.info(`📦 GitOps (${container.name}): forced run @ ${currentHead.substring(0, 7)} (no matching changes)`);
+      }
       await this.executeGitOpsCommands(container, change);
+      ran = true;
     });
 
     state.opQueue = op.catch(() => undefined); // keep the chain alive after errors
     await op;
+    return ran;
   }
 
   /**
@@ -816,6 +877,190 @@ export class MonitorService {
           error instanceof Error ? error.message : String(error)
         );
       }
+    }
+  }
+
+  private manualChange(forced: boolean): GitChangeInfo {
+    return {
+      changedFiles: [],
+      previousCommit: '',
+      currentCommit: '',
+      commitMessage: forced ? 'Manual trigger (forced)' : 'Manual trigger',
+      timestamp: new Date(),
+    };
+  }
+
+  /**
+   * Containers that rely on the GLOBAL GitOps repo: GitOps enabled and no
+   * per-container repo of their own.
+   */
+  private globalGitopsConsumers(containers: ContainerInfo[]): ContainerInfo[] {
+    const config = getConfig();
+    return containers.filter((c) => {
+      if (c.gitopsRepoUrl) return false;
+      return c.gitopsEnabled !== undefined ? c.gitopsEnabled : config.gitops?.enabled || false;
+    });
+  }
+
+  /**
+   * Manually trigger the GLOBAL GitOps process on demand (HTTP).
+   * - mode 'run':   execute the global commands now for every global consumer.
+   * - mode 'check': fetch + diff; run only on matching changes. With force,
+   *                 pull latest and run for all consumers even with no changes.
+   */
+  async triggerGlobalGitOps(mode: GitOpsTriggerMode, force: boolean): Promise<GitOpsTriggerResult> {
+    const base = { scope: 'global' as const, mode, forced: force };
+
+    if (!this.gitService) {
+      return { ...base, triggered: false, code: 'disabled', message: 'Global GitOps is not enabled' };
+    }
+    if (this.globalGitopsExecuting) {
+      return { ...base, triggered: false, code: 'busy', message: 'Global GitOps is already executing' };
+    }
+
+    this.globalGitopsExecuting = true;
+    try {
+      const containers = await this.runtimeClient.getRunningContainers();
+      const consumers = this.globalGitopsConsumers(containers);
+
+      if (mode === 'run') {
+        if (consumers.length === 0) {
+          return { ...base, triggered: false, code: 'noop', affected: [], message: 'No containers use global GitOps' };
+        }
+        await this.dispatchGlobalGitOps(consumers, this.manualChange(force));
+        return { ...base, triggered: true, code: 'ok', affected: consumers.map((c) => c.name) };
+      }
+
+      // mode === 'check'
+      const changes = await this.gitService.checkForChanges();
+      if (changes) {
+        const affected = this.getAffectedContainers(containers, changes, true);
+        if (affected.length > 0) {
+          await this.dispatchGlobalGitOps(affected, changes);
+        }
+        return {
+          ...base,
+          triggered: affected.length > 0,
+          code: affected.length > 0 ? 'ok' : 'noop',
+          changed: true,
+          affected: affected.map((c) => c.name),
+          message: affected.length > 0 ? undefined : 'Changes did not affect any container',
+        };
+      }
+
+      // No new changes.
+      if (force) {
+        if (consumers.length === 0) {
+          return { ...base, triggered: false, code: 'noop', changed: false, affected: [], message: 'No containers use global GitOps' };
+        }
+        await this.gitService.pull(); // ensure the working tree is at latest
+        await this.dispatchGlobalGitOps(consumers, this.manualChange(true));
+        return { ...base, triggered: true, code: 'ok', changed: false, affected: consumers.map((c) => c.name) };
+      }
+
+      return { ...base, triggered: false, code: 'noop', changed: false, message: 'No relevant changes' };
+    } catch (error) {
+      logger.error('❌ Manual global GitOps trigger failed:', error);
+      return { ...base, triggered: false, code: 'error', message: error instanceof Error ? error.message : String(error) };
+    } finally {
+      this.globalGitopsExecuting = false;
+    }
+  }
+
+  /**
+   * Manually trigger GitOps for a single container/deployment on demand (HTTP),
+   * matched by container name.
+   * - mode 'run':   execute that container's commands now (works for both
+   *                 per-container repos and global-repo consumers).
+   * - mode 'check': fetch + diff for the relevant repo; run on matching changes,
+   *                 or with force pull latest and run regardless.
+   */
+  async triggerContainerGitOps(
+    containerName: string,
+    mode: GitOpsTriggerMode,
+    force: boolean
+  ): Promise<GitOpsTriggerResult> {
+    const base = { scope: 'container' as const, mode, forced: force };
+    const config = getConfig();
+
+    let container: ContainerInfo | undefined;
+    try {
+      const containers = await this.runtimeClient.getRunningContainers();
+      container = containers.find((c) => c.name === containerName);
+    } catch (error) {
+      return { ...base, triggered: false, code: 'error', message: error instanceof Error ? error.message : String(error) };
+    }
+
+    if (!container) {
+      return { ...base, triggered: false, code: 'not_found', message: `Container '${containerName}' is not currently monitored` };
+    }
+
+    const gitopsEnabled =
+      container.gitopsEnabled !== undefined ? container.gitopsEnabled : config.gitops?.enabled || false;
+    if (!gitopsEnabled) {
+      return { ...base, triggered: false, code: 'disabled', message: `GitOps is not enabled for '${containerName}'` };
+    }
+
+    if (this.gitopsExecuting.has(container.id)) {
+      return { ...base, triggered: false, code: 'busy', message: `GitOps is already executing for '${containerName}'` };
+    }
+
+    this.gitopsExecuting.add(container.id);
+    try {
+      if (mode === 'run') {
+        await this.executeGitOpsCommands(container, this.manualChange(force));
+        return { ...base, triggered: true, code: 'ok', affected: [container.name] };
+      }
+
+      // mode === 'check'
+      if (container.gitopsRepoUrl) {
+        // Per-container repo: drive the shared-repo subscriber flow.
+        const ensured = await this.getOrCreateSubscriber(container);
+        if (!ensured) {
+          return { ...base, triggered: false, code: 'error', message: `Could not initialize GitOps repo for '${containerName}'` };
+        }
+        const ran = await this.runSharedCheckForSubscriber(ensured.state, ensured.sub, container, force);
+        return {
+          ...base,
+          triggered: ran,
+          code: ran ? 'ok' : 'noop',
+          affected: ran ? [container.name] : [],
+          message: ran ? undefined : 'No relevant changes',
+        };
+      }
+
+      // Global-repo consumer: check the global repo, scoped to this container.
+      if (!this.gitService) {
+        return { ...base, triggered: false, code: 'disabled', message: 'Global GitOps is not enabled' };
+      }
+      if (this.globalGitopsExecuting) {
+        return { ...base, triggered: false, code: 'busy', message: 'Global GitOps is already executing' };
+      }
+      this.globalGitopsExecuting = true;
+      try {
+        const changes = await this.gitService.checkForChanges();
+        if (changes) {
+          const affected = this.getAffectedContainers([container], changes, true);
+          if (affected.length > 0) {
+            await this.executeGitOpsCommands(container, changes);
+            return { ...base, triggered: true, code: 'ok', changed: true, affected: [container.name] };
+          }
+          return { ...base, triggered: false, code: 'noop', changed: true, message: "Changes did not match this container's watch paths" };
+        }
+        if (force) {
+          await this.gitService.pull();
+          await this.executeGitOpsCommands(container, this.manualChange(true));
+          return { ...base, triggered: true, code: 'ok', changed: false, affected: [container.name] };
+        }
+        return { ...base, triggered: false, code: 'noop', changed: false, message: 'No relevant changes' };
+      } finally {
+        this.globalGitopsExecuting = false;
+      }
+    } catch (error) {
+      logger.error(`❌ Manual GitOps trigger failed for ${containerName}:`, error);
+      return { ...base, triggered: false, code: 'error', message: error instanceof Error ? error.message : String(error) };
+    } finally {
+      this.gitopsExecuting.delete(container.id);
     }
   }
 

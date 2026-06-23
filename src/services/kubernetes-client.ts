@@ -1,5 +1,5 @@
 import * as k8s from '@kubernetes/client-node';
-import { ContainerInfo } from '../types';
+import { ComponentHealth, ContainerInfo } from '../types';
 import { IRuntimeClient } from './runtime-client';
 import { logger } from '../utils/logger';
 import { getConfig } from '../utils/config';
@@ -127,6 +127,7 @@ export class KubernetesClient implements IRuntimeClient {
             (cs) => cs.name === containerSpec.name
           );
           const digest = this.extractDigest(containerStatus?.imageID);
+          const { health, healthReason } = this.deriveHealth(containerStatus, workload);
 
           if (digest) {
             this.imageDigestCache.set(image, digest);
@@ -173,6 +174,8 @@ export class KubernetesClient implements IRuntimeClient {
             workloadKind: workload?.kind,
             workloadName: workload?.name,
             containerName: containerSpec.name,
+            health,
+            healthReason,
           });
         }
       }
@@ -499,6 +502,44 @@ export class KubernetesClient implements IRuntimeClient {
     if ((status.updatedNumberScheduled ?? 0) !== (status.desiredNumberScheduled ?? 0)) return false;
     if ((status.numberUnavailable ?? 0) > 0) return false;
     return true;
+  }
+
+  /**
+   * Derive dashboard health for a pod's container from its status and the
+   * owning workload's rollout state. Note: pods whose workload is mid-rollout
+   * are filtered out upstream, so this mostly classifies settled pods.
+   */
+  private deriveHealth(
+    cs: k8s.V1ContainerStatus | undefined,
+    workload: { stable?: boolean } | null
+  ): { health: ComponentHealth; healthReason?: string } {
+    // A waiting container surfaces the most actionable signal (image pull /
+    // crash loop errors), so check it before readiness.
+    const waitingReason = cs?.state?.waiting?.reason;
+    if (waitingReason) {
+      const degradedReasons = ['CrashLoopBackOff', 'ImagePullBackOff', 'ErrImagePull', 'CreateContainerError', 'CreateContainerConfigError', 'InvalidImageName'];
+      if (degradedReasons.includes(waitingReason)) {
+        return { health: ComponentHealth.DEGRADED, healthReason: waitingReason };
+      }
+      return { health: ComponentHealth.PROGRESSING, healthReason: waitingReason };
+    }
+
+    if (cs?.state?.terminated) {
+      const reason = cs.state.terminated.reason || 'Terminated';
+      return { health: ComponentHealth.DEGRADED, healthReason: reason };
+    }
+
+    if (workload && workload.stable === false) {
+      return { health: ComponentHealth.PROGRESSING, healthReason: 'rollout in progress' };
+    }
+
+    if (cs?.ready) {
+      return { health: ComponentHealth.HEALTHY };
+    }
+    if (cs?.state?.running) {
+      return { health: ComponentHealth.PROGRESSING, healthReason: 'not ready' };
+    }
+    return { health: ComponentHealth.UNKNOWN };
   }
 
   /**

@@ -1,5 +1,5 @@
 import Docker from 'dockerode';
-import { ContainerInfo } from '../types';
+import { ComponentHealth, ContainerInfo } from '../types';
 import { IRuntimeClient } from './runtime-client';
 import { logger } from '../utils/logger';
 import { getConfig } from '../utils/config';
@@ -30,6 +30,7 @@ export class DockerClient implements IRuntimeClient {
         const inspect = await container.inspect();
 
         const labels = inspect.Config.Labels || {};
+        const { health, healthReason } = this.deriveHealth(inspect);
 
         const containerInfo: ContainerInfo = {
           id: containerData.Id,
@@ -38,6 +39,8 @@ export class DockerClient implements IRuntimeClient {
           imageId: inspect.Image,
           labels,
           created: inspect.Created ? new Date(inspect.Created).getTime() : 0,
+          health,
+          healthReason,
           policy: parsePolicyFromLabel(labels['containrdog.policy']),
           globPattern: labels['containrdog.glob-pattern'],
           autoUpdate: parseAutoUpdateLabel(labels['containrdog.auto-update']),
@@ -294,6 +297,42 @@ export class DockerClient implements IRuntimeClient {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Derive the dashboard health of a running container from its inspect state.
+   * Honours the image HEALTHCHECK when present; otherwise infers from the
+   * run/restart state. (Distinct from evaluateHealth(), which gates updates.)
+   */
+  private deriveHealth(
+    info: Docker.ContainerInspectInfo
+  ): { health: ComponentHealth; healthReason?: string } {
+    const state = info.State;
+
+    if (state.Health) {
+      switch (state.Health.Status) {
+        case 'healthy':
+          return { health: ComponentHealth.HEALTHY };
+        case 'unhealthy':
+          return { health: ComponentHealth.DEGRADED, healthReason: 'healthcheck failing' };
+        case 'starting':
+          return { health: ComponentHealth.PROGRESSING, healthReason: 'healthcheck starting' };
+      }
+    }
+
+    if (state.Restarting) {
+      return { health: ComponentHealth.DEGRADED, healthReason: 'restarting' };
+    }
+    if (state.Status === 'exited' || state.Status === 'dead') {
+      return { health: ComponentHealth.DEGRADED, healthReason: `container ${state.Status}` };
+    }
+    if ((info.RestartCount ?? 0) > 3) {
+      return { health: ComponentHealth.DEGRADED, healthReason: `restarted ${info.RestartCount}x` };
+    }
+    if (state.Running) {
+      return { health: ComponentHealth.HEALTHY };
+    }
+    return { health: ComponentHealth.UNKNOWN };
   }
 
   private evaluateHealth(

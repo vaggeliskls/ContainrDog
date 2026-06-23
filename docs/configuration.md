@@ -93,14 +93,21 @@ After an auto-update, ContainrDog verifies the new version actually comes up hea
 | `REGISTRY_CREDENTIALS` | — | JSON credentials (alternative to config.json) |
 | `CREDENTIALS_FILE` | — | Path to a JSON credentials file |
 
-## Dashboard UI
+## HTTP API & Dashboard UI
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `UI_ENABLED` | `false` | Enable the web dashboard |
-| `UI_PORT` | `8080` | Port the dashboard listens on |
+| `HTTP_API` | `true` | Run the built-in HTTP server (status + GitOps triggers). Set `false` to disable it entirely |
+| `UI_ENABLED` | `false` | Serve the web dashboard page at `/`. Does **not** gate the HTTP API |
+| `UI_PORT` | `8080` | Port the HTTP server listens on (alias: `HTTP_PORT`) |
 
-When enabled, the dashboard is available at `http://<host>:<UI_PORT>/` and exposes a read-only JSON API at `/api/status`.
+The HTTP server runs by default and always exposes:
+- `GET /api/status` — read-only JSON status
+- `POST /api/gitops/trigger[/<container>]` — on-demand GitOps triggers (see [GitOps → HTTP Triggers](gitops.md#http-triggers))
+
+`UI_ENABLED=true` additionally serves the dashboard page at `http://<host>:<UI_PORT>/`. With the UI disabled, `/` returns 404 but the API endpoints still work.
+
+The dashboard presents monitored workloads ArgoCD-style: one card per component with a **Health** status (Healthy / Degraded / Progressing / Unknown) and a **Sync** status (Synced / OutOfSync / Updating / Failed), plus current→available image tags. Cards are sorted problems-first and can be filtered by name, health, or sync.
 
 > **Docker**: publish the port with `-p 8080:8080` (or `ports: ["8080:8080"]` in Compose).
 >

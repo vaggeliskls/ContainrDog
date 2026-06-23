@@ -1,5 +1,6 @@
-import { ContainerInfo } from '../types';
+import { ComponentHealth, ContainerInfo, ImageUpdateInfo, SyncStatus } from '../types';
 import { getConfig } from '../utils/config';
+import { ImageParser } from '../utils/image-parser';
 
 export interface GitopsStatus {
   scope: 'global' | 'per-container' | 'none';
@@ -22,6 +23,14 @@ export interface ContainerStatus {
   policy: string;
   imageLabelKeys?: string[];
   gitops: GitopsStatus;
+  // ArgoCD-style component status
+  health: ComponentHealth;
+  healthReason?: string;
+  sync: SyncStatus;
+  currentTag: string;
+  availableTag?: string;
+  updateType?: string;
+  lastError?: string;
 }
 
 export interface UpdateEvent {
@@ -71,9 +80,10 @@ export class StatusStore {
     }
   }
 
-  setContainers(containers: ContainerInfo[]): void {
+  setContainers(containers: ContainerInfo[], updates?: Map<string, ImageUpdateInfo>): void {
     const config = getConfig();
     this.containers = containers.map((c) => {
+      const update = updates?.get(c.id);
       const globallyEnabled = config.gitops?.enabled ?? false;
       const enabled = c.gitopsEnabled !== undefined ? c.gitopsEnabled : globallyEnabled;
 
@@ -112,8 +122,30 @@ export class StatusStore {
         policy: c.policy ?? config.policy,
         imageLabelKeys: c.imageLabelKeys,
         gitops,
+        health: c.health ?? ComponentHealth.UNKNOWN,
+        healthReason: c.healthReason,
+        sync: update ? SyncStatus.OUTDATED : SyncStatus.SYNCED,
+        currentTag: ImageParser.parse(c.image).tag,
+        availableTag: update?.availableImage.tag,
+        updateType: update?.updateType,
       };
     });
+  }
+
+  /**
+   * Override a single component's sync status after an auto-update attempt
+   * (updating → synced/failed). Keyed by container id; no-op if the container
+   * is no longer in the current snapshot.
+   */
+  markComponentSync(containerId: string, sync: SyncStatus, opts?: { error?: string }): void {
+    const c = this.containers.find((x) => x.id === containerId);
+    if (!c) return;
+    c.sync = sync;
+    c.lastError = opts?.error;
+    if (sync === SyncStatus.SYNCED) {
+      c.availableTag = undefined;
+      c.lastError = undefined;
+    }
   }
 
   recordUpdate(event: UpdateEvent): void {

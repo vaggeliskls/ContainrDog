@@ -67,10 +67,19 @@ export interface Config {
   autoUpdate: boolean; // Global auto-update setting
   imageLabelKeys?: string[]; // Image label keys to display in notifications (e.g. org.opencontainers.image.revision). Comma-separated in IMAGE_LABEL.
   labelFetchTimeout: number; // Timeout in ms for fetching image label values (default: 30000)
+  update: UpdateVerificationConfig; // Post-update health verification, rollback, and failure cooldown
   webhook?: WebhookConfig; // Webhook notifications
   gitops?: GitOpsConfig; // GitOps configuration
   ecr?: ECRConfig; // AWS ECR configuration
   kubernetes?: KubernetesConfig; // Kubernetes configuration
+}
+
+export interface UpdateVerificationConfig {
+  healthCheckEnabled: boolean; // Verify the updated container/rollout is healthy before declaring success (default: true)
+  healthCheckTimeout: number; // Max time in ms to wait for the new version to become healthy (default: 30000)
+  healthCheckInterval: number; // Poll interval in ms while waiting for health (default: 3000)
+  rollbackOnFailure: boolean; // Restore the previous image when the health check fails (default: true)
+  failureCooldown: number; // Time in ms to skip re-attempting a failed (container, target image) pair (default: 3600000)
 }
 
 export interface RegistryCredentials {

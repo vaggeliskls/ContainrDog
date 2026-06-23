@@ -48,6 +48,12 @@ export class MonitorService {
   private globalGitopsExecuting: boolean = false; // Track global GitOps execution
   private updateCheckExecuting: boolean = false; // Track if update check is running
   private lastMonitoredContainerIds: string = ''; // Track last seen container set for change detection
+  // After a failed auto-update, suppress re-attempts of the SAME target image
+  // for a cooldown window. Without this, a crash-looping new image (or an old
+  // image an external supervisor keeps recreating) is re-detected every cycle,
+  // producing an endless update/notify loop. Keyed by container.name because a
+  // container's id changes when it is recreated, but its name is stable.
+  private updateFailureCooldowns: Map<string, { targetImage: string; until: number }> = new Map();
 
   constructor(runtimeClient: IRuntimeClient) {
     this.runtimeClient = runtimeClient;
@@ -191,6 +197,8 @@ export class MonitorService {
     const autoUpdateEnabled =
       container.autoUpdate !== undefined ? container.autoUpdate : config.autoUpdate;
 
+    const targetImage = ImageParser.toString(update.availableImage);
+
     const baseEvent = {
       timestamp: new Date().toISOString(),
       containerName: container.name,
@@ -201,6 +209,22 @@ export class MonitorService {
       labelValues: update.availableLabelValues,
     };
 
+    // Skip if this exact target image failed recently and is still cooling down.
+    // A different (newer) target is allowed through; an expired entry is cleared.
+    if (autoUpdateEnabled) {
+      const cooldown = this.updateFailureCooldowns.get(container.name);
+      if (cooldown && cooldown.targetImage === targetImage && cooldown.until > Date.now()) {
+        const remainingS = Math.ceil((cooldown.until - Date.now()) / 1000);
+        logger.warn(
+          `   ⏳ Skipping ${container.name}: update to ${update.availableImage.tag} failed recently; cooling down for ${remainingS}s more`
+        );
+        return;
+      }
+      if (cooldown && (cooldown.targetImage !== targetImage || cooldown.until <= Date.now())) {
+        this.updateFailureCooldowns.delete(container.name);
+      }
+    }
+
     try {
       logger.info(`🔔 UPDATE AVAILABLE`);
       logger.info(`   Container: ${container.name}`);
@@ -210,6 +234,7 @@ export class MonitorService {
       if (autoUpdateEnabled) {
         logger.info(`   Action:    Auto-updating...`);
         await this.autoUpdateContainer(update);
+        this.updateFailureCooldowns.delete(container.name); // success clears any cooldown
         StatusStore.instance.recordUpdate({ ...baseEvent, success: true });
       } else {
         logger.info(`   Action:    Skipped (auto-update disabled)`);
@@ -218,6 +243,21 @@ export class MonitorService {
       }
     } catch (error) {
       logger.error(`❌ Failed to handle update for ${update.container.name}:`, error);
+
+      // Record a cooldown so the same failing target isn't retried — and
+      // re-notified — every cycle. The failure notification itself was already
+      // sent once by autoUpdateContainer.
+      const cooldownMs = getConfig().update.failureCooldown;
+      if (autoUpdateEnabled && cooldownMs > 0) {
+        this.updateFailureCooldowns.set(container.name, {
+          targetImage,
+          until: Date.now() + cooldownMs,
+        });
+        logger.warn(
+          `   ⏳ ${container.name}: will not retry ${update.availableImage.tag} for ${Math.ceil(cooldownMs / 1000)}s`
+        );
+      }
+
       StatusStore.instance.recordUpdate({
         ...baseEvent,
         success: false,

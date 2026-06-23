@@ -201,9 +201,75 @@ export class KubernetesClient implements IRuntimeClient {
       return;
     }
 
-    logger.info(`   ☸️  Patching ${workloadKind}/${workloadName} in ${namespace}: ${containerName} -> ${newImageName}`);
+    // Capture the current image for this container BEFORE patching, so we can
+    // roll the workload back to it if the new image fails to roll out.
+    const previousImage = await this.getWorkloadContainerImage(
+      workloadKind,
+      workloadName,
+      namespace,
+      containerName
+    );
 
-    // Strategic merge patch: Kubernetes merges by container name, so only the named container is updated
+    logger.info(`   ☸️  Patching ${workloadKind}/${workloadName} in ${namespace}: ${containerName} -> ${newImageName}`);
+    await this.patchWorkloadImage(workloadKind, workloadName, namespace, containerName, newImageName);
+    logger.info(`   ✅ Successfully patched ${workloadKind}/${workloadName}`);
+
+    const cfg = getConfig().update;
+    if (!cfg.healthCheckEnabled) {
+      return;
+    }
+
+    logger.info(`   🩺 Waiting for rollout (up to ${Math.round(cfg.healthCheckTimeout / 1000)}s)...`);
+    const healthy = await this.waitForRolloutStable(
+      workloadKind,
+      workloadName,
+      namespace,
+      cfg.healthCheckTimeout,
+      cfg.healthCheckInterval
+    );
+
+    if (healthy) {
+      logger.info(`   ✅ Rollout of ${workloadKind}/${workloadName} to ${newImageName} is ready`);
+      return;
+    }
+
+    logger.error(`   ❌ Rollout of ${workloadKind}/${workloadName} to ${newImageName} did not become ready`);
+
+    if (!cfg.rollbackOnFailure || !previousImage) {
+      if (!previousImage) {
+        logger.warn(`   ⚠️  Could not determine previous image; cannot roll back ${workloadKind}/${workloadName}`);
+      }
+      throw new Error(`Rollout of ${newImageName} to ${workloadKind}/${workloadName} did not become ready`);
+    }
+
+    logger.warn(`   ↩️  Rolling back ${workloadKind}/${workloadName} to ${previousImage}...`);
+    try {
+      await this.patchWorkloadImage(workloadKind, workloadName, namespace, containerName, previousImage);
+    } catch (rollbackError) {
+      const detail = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+      throw new Error(
+        `Rollout of ${newImageName} to ${workloadKind}/${workloadName} failed AND rollback to ${previousImage} failed: ${detail}`
+      );
+    }
+
+    logger.info(`   ✅ Rolled back ${workloadKind}/${workloadName} to ${previousImage}`);
+    throw new Error(
+      `Rollout of ${newImageName} to ${workloadKind}/${workloadName} did not become ready; rolled back to ${previousImage}`
+    );
+  }
+
+  /**
+   * Apply a strategic merge patch that sets the image of a single named
+   * container in the workload's pod template (and bumps restartedAt so the
+   * rollout always re-triggers, even for a same-tag digest change).
+   */
+  private async patchWorkloadImage(
+    workloadKind: string,
+    workloadName: string,
+    namespace: string,
+    containerName: string,
+    image: string
+  ): Promise<void> {
     const patch = {
       spec: {
         template: {
@@ -213,7 +279,7 @@ export class KubernetesClient implements IRuntimeClient {
             },
           },
           spec: {
-            containers: [{ name: containerName, image: newImageName }],
+            containers: [{ name: containerName, image }],
           },
         },
       },
@@ -243,12 +309,93 @@ export class KubernetesClient implements IRuntimeClient {
         default:
           throw new Error(`Unsupported workload kind for updates: ${workloadKind}`);
       }
-
-      logger.info(`   ✅ Successfully patched ${workloadKind}/${workloadName}`);
     } catch (error) {
       logger.error(`   ❌ Failed to patch ${workloadKind}/${workloadName}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Read the current image of a named container from a workload's pod template.
+   * Used to remember the rollback target before patching.
+   */
+  private async getWorkloadContainerImage(
+    workloadKind: string,
+    workloadName: string,
+    namespace: string,
+    containerName: string
+  ): Promise<string | undefined> {
+    try {
+      let containers: k8s.V1Container[] | undefined;
+      switch (workloadKind) {
+        case 'Deployment':
+          containers = (await this.appsV1Api.readNamespacedDeployment({ name: workloadName, namespace }))
+            .spec?.template?.spec?.containers;
+          break;
+        case 'StatefulSet':
+          containers = (await this.appsV1Api.readNamespacedStatefulSet({ name: workloadName, namespace }))
+            .spec?.template?.spec?.containers;
+          break;
+        case 'DaemonSet':
+          containers = (await this.appsV1Api.readNamespacedDaemonSet({ name: workloadName, namespace }))
+            .spec?.template?.spec?.containers;
+          break;
+        default:
+          return undefined;
+      }
+      return containers?.find((c) => c.name === containerName)?.image;
+    } catch (error) {
+      logger.warn(`⚠️  Could not read current image for ${workloadKind}/${workloadName}: ${error}`);
+      return undefined;
+    }
+  }
+
+  /**
+   * Poll the workload until its rollout is settled (new revision fully updated,
+   * ready, and nothing unavailable) or the timeout elapses. Reuses the same
+   * stability predicates as the mid-rollout skip in getRunningContainers().
+   */
+  private async waitForRolloutStable(
+    workloadKind: string,
+    workloadName: string,
+    namespace: string,
+    timeoutMs: number,
+    intervalMs: number
+  ): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+
+    while (Date.now() < deadline) {
+      try {
+        switch (workloadKind) {
+          case 'Deployment': {
+            const d = await this.appsV1Api.readNamespacedDeployment({ name: workloadName, namespace });
+            if (this.isDeploymentStable(d)) return true;
+            break;
+          }
+          case 'StatefulSet': {
+            const s = await this.appsV1Api.readNamespacedStatefulSet({ name: workloadName, namespace });
+            if (this.isStatefulSetStable(s)) return true;
+            break;
+          }
+          case 'DaemonSet': {
+            const ds = await this.appsV1Api.readNamespacedDaemonSet({ name: workloadName, namespace });
+            if (this.isDaemonSetStable(ds)) return true;
+            break;
+          }
+          default:
+            return true; // Unknown kind — don't block on health we can't assess.
+        }
+      } catch (error) {
+        logger.debug(`Rollout health read failed (will retry): ${error}`);
+      }
+      await this.sleep(intervalMs);
+    }
+
+    return false;
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**

@@ -69,6 +69,20 @@ spec:
               value: {{ .Values.config.labelFetchTimeout | quote }}
             {{- end }}
 
+            # Update verification & rollback
+            {{- with .Values.config.update }}
+            - name: HEALTH_CHECK_ENABLED
+              value: {{ .healthCheckEnabled | quote }}
+            - name: HEALTH_CHECK_TIMEOUT
+              value: {{ .healthCheckTimeout | quote }}
+            - name: HEALTH_CHECK_INTERVAL
+              value: {{ .healthCheckInterval | quote }}
+            - name: ROLLBACK_ON_FAILURE
+              value: {{ .rollbackOnFailure | quote }}
+            - name: UPDATE_FAILURE_COOLDOWN
+              value: {{ .failureCooldown | quote }}
+            {{- end }}
+
             # Hooks
             {{- if .Values.hooks.preUpdateCommands }}
             - name: PRE_UPDATE_COMMANDS

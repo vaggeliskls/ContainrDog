@@ -35,6 +35,18 @@ All configuration is via environment variables.
 |----------|---------|-------------|
 | `GLOB_PATTERN` | — | Wildcard pattern for `glob` policy |
 
+## Update Verification & Rollback
+
+After an auto-update, ContainrDog verifies the new version actually comes up healthy before reporting success. If it doesn't, the previous image is restored and a **failure** notification is sent — instead of a false "success" and a re-update loop.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HEALTH_CHECK_ENABLED` | `true` | Verify the new container/rollout is healthy after an update before declaring success |
+| `HEALTH_CHECK_TIMEOUT` | `30` | Seconds to wait for the new version to become healthy. Docker: honours the image `HEALTHCHECK` if present, otherwise requires the container to stay running (no crash/restart loop). Kubernetes: waits for the rollout to become fully ready |
+| `HEALTH_CHECK_INTERVAL` | `3` | Seconds between health polls while waiting |
+| `ROLLBACK_ON_FAILURE` | `true` | Restore the previous image when the health check fails. Docker rolls back by image ID (survives digest-only updates); Kubernetes re-patches the prior image |
+| `UPDATE_FAILURE_COOLDOWN` | `1h` | After a failed update, don't re-attempt the **same** target image for this long (`h`/`m`/`s`). Stops the repeated update/notification loop. A newer target is still attempted; set to `0` to disable |
+
 ## Commands (Hooks)
 
 | Variable | Default | Description |

@@ -92,3 +92,21 @@ describe('ImageParser.isSemanticVersion', () => {
     expect(ImageParser.isSemanticVersion(tag)).toBe(expected);
   });
 });
+
+describe('ImageParser.sameImage', () => {
+  it.each([
+    // docker.io default registry is normalized away
+    ['docker.io/myorg/myapp:2.11.6', 'myorg/myapp:2.11.6', true],
+    // library/ prefix for official images is normalized
+    ['docker.io/library/nginx:1.21', 'nginx:1.21', true],
+    ['nginx:1.21', 'nginx:1.21', true],
+    // different tags are different images
+    ['myorg/myapp:2.11.5', 'myorg/myapp:2.11.6', false],
+    // different registries are different images
+    ['ghcr.io/myorg/myapp:2.11.6', 'myorg/myapp:2.11.6', false],
+    // different repositories are different images
+    ['myorg/myapp:2.11.6', 'myorg/other-api:2.11.6', false],
+  ])('%s vs %s → %s', (a, b, expected) => {
+    expect(ImageParser.sameImage(a, b)).toBe(expected);
+  });
+});

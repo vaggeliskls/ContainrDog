@@ -3,6 +3,7 @@ import { ComponentHealth, ContainerInfo } from '../types';
 import { IRuntimeClient } from './runtime-client';
 import { logger } from '../utils/logger';
 import { getConfig } from '../utils/config';
+import { ImageParser } from '../utils/image-parser';
 import {
   parsePolicyFromLabel,
   parseAutoUpdateLabel,
@@ -190,7 +191,11 @@ export class KubernetesClient implements IRuntimeClient {
     return this.imageDigestCache.get(imageName);
   }
 
-  async updateContainerImage(containerId: string, newImageName: string): Promise<void> {
+  async updateContainerImage(
+    containerId: string,
+    newImageName: string,
+    knownPreviousImage?: string
+  ): Promise<void> {
     // containerId format: namespace/workloadKind/workloadName/containerName
     const parts = containerId.split('/');
     if (parts.length < 4) {
@@ -204,18 +209,29 @@ export class KubernetesClient implements IRuntimeClient {
       return;
     }
 
-    // Capture the current image for this container BEFORE patching, so we can
-    // roll the workload back to it if the new image fails to roll out.
-    const previousImage = await this.getWorkloadContainerImage(
+    const specImage = await this.getWorkloadContainerImage(
       workloadKind,
       workloadName,
       namespace,
       containerName
     );
 
-    logger.info(`   ☸️  Patching ${workloadKind}/${workloadName} in ${namespace}: ${containerName} -> ${newImageName}`);
-    await this.patchWorkloadImage(workloadKind, workloadName, namespace, containerName, newImageName);
-    logger.info(`   ✅ Successfully patched ${workloadKind}/${workloadName}`);
+    // Rollback target. Prefer the image captured at detection time: a
+    // pre-update command may have already deployed the new image, in which
+    // case the live spec no longer holds the previous version — rolling back
+    // to the spec value would re-apply the image we're trying to back out of.
+    const previousImage = knownPreviousImage ?? specImage;
+
+    if (specImage && ImageParser.sameImage(specImage, newImageName)) {
+      // A pre-update command already applied the target image (e.g. a GitOps
+      // helm deploy). Patching again would bump restartedAt and needlessly
+      // restart pods that are already rolling out — just verify that rollout.
+      logger.info(`   ⏭️  ${workloadKind}/${workloadName} spec already at ${newImageName}; skipping patch, verifying rollout`);
+    } else {
+      logger.info(`   ☸️  Patching ${workloadKind}/${workloadName} in ${namespace}: ${containerName} -> ${newImageName}`);
+      await this.patchWorkloadImage(workloadKind, workloadName, namespace, containerName, newImageName);
+      logger.info(`   ✅ Successfully patched ${workloadKind}/${workloadName}`);
+    }
 
     const cfg = getConfig().update;
     if (!cfg.healthCheckEnabled) {

@@ -103,6 +103,22 @@ describe('MonitorService failure cooldown', () => {
     expect(client.updateContainerImage).toHaveBeenCalledTimes(3);
   });
 
+  it('passes the detection-time image as the rollback target', async () => {
+    // Pre-update commands can deploy the new image before the runtime client
+    // runs, so the rollback target must come from detection time, not the
+    // live spec.
+    const client = makeRuntimeClient(() => Promise.resolve());
+    const monitor = new MonitorService(client) as any;
+
+    await monitor.handleUpdate(makeUpdate('1.0.0', '2.0.0'));
+
+    expect(client.updateContainerImage).toHaveBeenCalledWith(
+      'cid-1',
+      expect.stringContaining(':2.0.0'),
+      'library/nginx:1.0.0'
+    );
+  });
+
   it('does not register a cooldown when failureCooldown is 0', async () => {
     baseConfig.update.failureCooldown = 0;
     const client = makeRuntimeClient(() => Promise.reject(new Error('boom')));

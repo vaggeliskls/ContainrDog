@@ -318,7 +318,14 @@ export class MonitorService {
         await this.commandExecutor.executeUpdateCommands(update, preUpdateCommands);
       }
 
-      await this.runtimeClient.updateContainerImage(container.id, newImageName);
+      // Rollback target must be the image recorded at detection time: pre-update
+      // commands may have already deployed the new image, so the live spec no
+      // longer holds the previous version.
+      await this.runtimeClient.updateContainerImage(
+        container.id,
+        newImageName,
+        ImageParser.toString(update.currentImage)
+      );
 
       logger.info(`   ✅ Successfully updated to ${update.availableImage.tag}`);
 

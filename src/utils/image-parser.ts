@@ -52,6 +52,17 @@ export class ImageParser {
   }
 
   /**
+   * Whether two image strings reference the same image. Normalizes the
+   * docker.io default registry and library/ prefix, so
+   * "docker.io/foo/bar:1" equals "foo/bar:1".
+   */
+  static sameImage(a: string, b: string): boolean {
+    const pa = ImageParser.parse(a);
+    const pb = ImageParser.parse(b);
+    return pa.registry === pb.registry && pa.repository === pb.repository && pa.tag === pb.tag;
+  }
+
+  /**
    * Check if tag is a semantic version
    */
   static isSemanticVersion(tag: string): boolean {

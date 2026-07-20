@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.1](https://github.com/vaggeliskls/ContainrDog/compare/0.10.0...0.10.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* use detection-time image as rollback target and skip redundant patch ([cc65b10](https://github.com/vaggeliskls/ContainrDog/commit/cc65b107d9ff9d6b49d553b1c303a89ad9a109ad))
+* use detection-time image as rollback target and skip redundant patch ([6dec20d](https://github.com/vaggeliskls/ContainrDog/commit/6dec20db0a733e62d05ce1917b35cc9a259fcc40))
+
 ## [0.10.0](https://github.com/vaggeliskls/ContainrDog/compare/0.9.1...0.10.0) (2026-06-23)
 
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MonitorService } from '../../../src/services/monitor-service';
 import { IRuntimeClient } from '../../../src/services/runtime-client';
 import { ContainerInfo, ImageInfo, ImageUpdateInfo, UpdateType } from '../../../src/types';
@@ -222,5 +222,110 @@ describe('MonitorService GitOps triggers', () => {
     expect(res.code).toBe('noop');
     expect(res.triggered).toBe(false);
     expect(monitor.dispatchGlobalGitOps).not.toHaveBeenCalled();
+  });
+});
+
+describe('MonitorService GitOps-only mode (global commands, no monitored containers)', () => {
+  const gitopsConfig = {
+    enabled: true,
+    repoUrl: 'git@github.com:acme/deploy.git',
+    branch: 'main',
+    pollInterval: 60_000,
+    watchPaths: ['k8s/**'],
+    commands: ['echo deploy'],
+    clonePath: '',
+    quietMode: false,
+  };
+  const change = {
+    changedFiles: ['k8s/env.json'],
+    previousCommit: 'a',
+    currentCommit: 'b',
+    commitMessage: 'promote',
+    timestamp: new Date(0),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (baseConfig as any).gitops = gitopsConfig;
+  });
+
+  afterEach(() => {
+    (baseConfig as any).gitops = undefined;
+  });
+
+  it('runs global commands on a watched change even when no containers are monitored', async () => {
+    const monitor = new MonitorService(clientWithContainers([])) as any;
+    monitor.gitService = {
+      shouldRunOnInterval: () => false,
+      checkForChanges: vi.fn().mockResolvedValue(change),
+    };
+    monitor.lastGitopsCheck = 0;
+    monitor.executeGlobalGitOpsCommands = vi.fn().mockResolvedValue(undefined);
+
+    await monitor.checkGitOpsChanges();
+
+    expect(monitor.executeGlobalGitOpsCommands).toHaveBeenCalledTimes(1);
+    expect(monitor.executeGlobalGitOpsCommands).toHaveBeenCalledWith([], change);
+  });
+
+  it('stays quiet when global consumers exist but none is affected by the change', async () => {
+    // A consumer with narrower per-container watch paths that this change misses.
+    const consumer = gitopsContainer({ gitopsWatchPaths: ['other/**'] });
+    const monitor = new MonitorService(clientWithContainers([consumer])) as any;
+    monitor.gitService = {
+      shouldRunOnInterval: () => false,
+      checkForChanges: vi.fn().mockResolvedValue(change),
+    };
+    monitor.lastGitopsCheck = 0;
+    monitor.executeGlobalGitOpsCommands = vi.fn().mockResolvedValue(undefined);
+
+    await monitor.checkGitOpsChanges();
+
+    expect(monitor.executeGlobalGitOpsCommands).not.toHaveBeenCalled();
+  });
+
+  it('manual check runs global commands in GitOps-only mode and stays quiet with unaffected consumers', async () => {
+    const gitService = {
+      shouldRunOnInterval: () => false,
+      checkForChanges: vi.fn().mockResolvedValue(change),
+      pull: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const only = new MonitorService(clientWithContainers([])) as any;
+    only.gitService = gitService;
+    only.executeGlobalGitOpsCommands = vi.fn().mockResolvedValue(undefined);
+    const onlyRes = await only.triggerGlobalGitOps('check', false);
+    expect(only.executeGlobalGitOpsCommands).toHaveBeenCalledTimes(1);
+    expect(onlyRes).toMatchObject({ code: 'ok', triggered: true, changed: true, affected: [] });
+
+    const consumer = gitopsContainer({ gitopsWatchPaths: ['other/**'] });
+    const mixed = new MonitorService(clientWithContainers([consumer])) as any;
+    mixed.gitService = gitService;
+    mixed.executeGlobalGitOpsCommands = vi.fn().mockResolvedValue(undefined);
+    const mixedRes = await mixed.triggerGlobalGitOps('check', false);
+    expect(mixed.executeGlobalGitOpsCommands).not.toHaveBeenCalled();
+    expect(mixedRes).toMatchObject({ code: 'noop', triggered: false, changed: true });
+  });
+
+  it('does not run global commands when every affected container has its own commands', async () => {
+    const monitor = new MonitorService(clientWithContainers([])) as any;
+    monitor.executeGitOpsCommands = vi.fn().mockResolvedValue(undefined);
+    monitor.executeGlobalGitOpsCommands = vi.fn().mockResolvedValue(undefined);
+
+    await monitor.dispatchGlobalGitOps([gitopsContainer({ gitopsCommands: ['echo own'] })], change);
+
+    expect(monitor.executeGitOpsCommands).toHaveBeenCalledTimes(1);
+    expect(monitor.executeGlobalGitOpsCommands).not.toHaveBeenCalled();
+  });
+
+  it('manual global run executes global commands with no consumers', async () => {
+    const monitor = new MonitorService(clientWithContainers([])) as any;
+    monitor.gitService = {};
+    monitor.executeGlobalGitOpsCommands = vi.fn().mockResolvedValue(undefined);
+
+    const res = await monitor.triggerGlobalGitOps('run', false);
+
+    expect(monitor.executeGlobalGitOpsCommands).toHaveBeenCalledTimes(1);
+    expect(res).toMatchObject({ code: 'ok', triggered: true, affected: [] });
   });
 });

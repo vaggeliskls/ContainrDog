@@ -383,7 +383,8 @@ export class MonitorService {
                 return gitopsEnabled;
               });
 
-              if (affectedContainers.length > 0) {
+              const gitopsOnly = affectedContainers.length === 0 && this.hasGlobalGitOpsCommands();
+              if (affectedContainers.length > 0 || gitopsOnly) {
                 const intervalChange: GitChangeInfo = {
                   changedFiles: [],
                   previousCommit: '',
@@ -391,7 +392,7 @@ export class MonitorService {
                   commitMessage: 'Interval-based execution',
                   timestamp: new Date(),
                 };
-                await this.dispatchGlobalGitOps(affectedContainers, intervalChange);
+                await this.dispatchGlobalGitOps(affectedContainers, intervalChange, gitopsOnly);
               }
             } else {
               const changes = await this.gitService.checkForChanges();
@@ -402,6 +403,14 @@ export class MonitorService {
                 if (affectedContainers.length > 0) {
                   logger.info(`📦 GitOps (Global): ${affectedContainers.length} container(s) affected by changes`);
                   await this.dispatchGlobalGitOps(affectedContainers, changes);
+                } else if (this.isGitOpsOnlyMode(containers)) {
+                  // GitOps-only mode: no monitored workload consumes the global
+                  // repo at all (e.g. labeled-only with nothing labelled), but
+                  // the operator configured global commands -- the git change
+                  // itself is the trigger, so run them once. If consumers exist
+                  // but none matched this change, stay quiet as before.
+                  logger.info('📦 GitOps (Global): No monitored containers consume the global repo; running global commands (GitOps-only mode)');
+                  await this.dispatchGlobalGitOps([], changes, true);
                 }
               }
             }
@@ -657,9 +666,9 @@ export class MonitorService {
    */
   private async dispatchGlobalGitOps(
     affectedContainers: ContainerInfo[],
-    changes: GitChangeInfo
+    changes: GitChangeInfo,
+    gitopsOnly: boolean = false
   ): Promise<void> {
-    const config = getConfig();
     const perContainer: ContainerInfo[] = [];
     const globalCommandConsumers: ContainerInfo[] = [];
 
@@ -675,10 +684,30 @@ export class MonitorService {
       await this.executeGitOpsCommands(container, changes);
     }
 
-    const globalCommands = config.gitops?.commands;
-    if (globalCommandConsumers.length > 0 && globalCommands && globalCommands.length > 0) {
+    // Run the global commands once when at least one affected container relies
+    // on them, or when the caller established GitOps-only mode (no container
+    // consumes the global repo at all) -- but not when every affected container
+    // brings its own commands.
+    const runGlobal = globalCommandConsumers.length > 0 || gitopsOnly;
+    if (runGlobal && this.hasGlobalGitOpsCommands()) {
       await this.executeGlobalGitOpsCommands(globalCommandConsumers, changes);
     }
+  }
+
+  /** True when GITOPS_COMMANDS is configured for the global repo. */
+  private hasGlobalGitOpsCommands(): boolean {
+    const commands = getConfig().gitops?.commands;
+    return !!commands && commands.length > 0;
+  }
+
+  /**
+   * GitOps-only mode: global commands are configured but no monitored container
+   * consumes the global repo (e.g. LABELED=true with nothing labelled). The git
+   * change itself is then the trigger. When consumers exist, a change that hits
+   * none of them is a no-op, exactly as before.
+   */
+  private isGitOpsOnlyMode(containers: ContainerInfo[]): boolean {
+    return this.hasGlobalGitOpsCommands() && this.globalGitopsConsumers(containers).length === 0;
   }
 
   /**
@@ -700,7 +729,11 @@ export class MonitorService {
     const clonePath = `${cloneParent}/${extractRepoName(config.gitops!.repoUrl)}`;
     const quietMode = config.gitops?.quietMode ?? false;
 
-    logger.info(`📦 GitOps (Global): Executing commands once for ${affectedContainers.length} affected container(s)...`);
+    if (affectedContainers.length > 0) {
+      logger.info(`📦 GitOps (Global): Executing commands once for ${affectedContainers.length} affected container(s)...`);
+    } else {
+      logger.info('📦 GitOps (Global): Executing commands (GitOps-only mode, no monitored containers)...');
+    }
     logger.info(`   📁 Working directory: ${clonePath}`);
 
     try {
@@ -929,12 +962,13 @@ export class MonitorService {
     try {
       const containers = await this.runtimeClient.getRunningContainers();
       const consumers = this.globalGitopsConsumers(containers);
+      const gitopsOnly = this.isGitOpsOnlyMode(containers);
 
       if (mode === 'run') {
-        if (consumers.length === 0) {
-          return { ...base, triggered: false, code: 'noop', affected: [], message: 'No containers use global GitOps' };
+        if (consumers.length === 0 && !gitopsOnly) {
+          return { ...base, triggered: false, code: 'noop', affected: [], message: 'No containers use global GitOps and no global commands configured' };
         }
-        await this.dispatchGlobalGitOps(consumers, this.manualChange(force));
+        await this.dispatchGlobalGitOps(consumers, this.manualChange(force), gitopsOnly);
         return { ...base, triggered: true, code: 'ok', affected: consumers.map((c) => c.name) };
       }
 
@@ -942,26 +976,27 @@ export class MonitorService {
       const changes = await this.gitService.checkForChanges();
       if (changes) {
         const affected = this.getAffectedContainers(containers, changes, true);
-        if (affected.length > 0) {
-          await this.dispatchGlobalGitOps(affected, changes);
+        const shouldRun = affected.length > 0 || gitopsOnly;
+        if (shouldRun) {
+          await this.dispatchGlobalGitOps(affected, changes, gitopsOnly);
         }
         return {
           ...base,
-          triggered: affected.length > 0,
-          code: affected.length > 0 ? 'ok' : 'noop',
+          triggered: shouldRun,
+          code: shouldRun ? 'ok' : 'noop',
           changed: true,
           affected: affected.map((c) => c.name),
-          message: affected.length > 0 ? undefined : 'Changes did not affect any container',
+          message: shouldRun ? undefined : 'Changes did not affect any container',
         };
       }
 
       // No new changes.
       if (force) {
-        if (consumers.length === 0) {
-          return { ...base, triggered: false, code: 'noop', changed: false, affected: [], message: 'No containers use global GitOps' };
+        if (consumers.length === 0 && !gitopsOnly) {
+          return { ...base, triggered: false, code: 'noop', changed: false, affected: [], message: 'No containers use global GitOps and no global commands configured' };
         }
         await this.gitService.pull(); // ensure the working tree is at latest
-        await this.dispatchGlobalGitOps(consumers, this.manualChange(true));
+        await this.dispatchGlobalGitOps(consumers, this.manualChange(true), gitopsOnly);
         return { ...base, triggered: true, code: 'ok', changed: false, affected: consumers.map((c) => c.name) };
       }
 

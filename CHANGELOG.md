@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.0](https://github.com/vaggeliskls/ContainrDog/compare/0.10.1...0.11.0) (2026-08-18)
+
+
+### Features
+
+* **gitops:** run global commands in GitOps-only mode when no containers are monitored ([06ea57f](https://github.com/vaggeliskls/ContainrDog/commit/06ea57fda7c587b1671be621d9c55b2d93a62ef5))
+* **gitops:** run global commands in GitOps-only mode when no containers are monitored ([10746cd](https://github.com/vaggeliskls/ContainrDog/commit/10746cd6e36f31df857a90cf078e036e023cc76b))
+
 ## [0.10.1](https://github.com/vaggeliskls/ContainrDog/compare/0.10.0...0.10.1) (2026-07-20)
 
 

@@ -431,7 +431,9 @@ export class WebhookService {
     const status = success ? 'Success' : 'Failed';
     const emoji = success ? '✅' : '❌';
     const containerNames = affectedContainers.map((c) => c.name);
-    const containersDisplay = containerNames.length <= 6
+    const containersDisplay = containerNames.length === 0
+      ? '(none — GitOps-only run)'
+      : containerNames.length <= 6
       ? containerNames.join(', ')
       : `${containerNames.slice(0, 6).join(', ')} +${containerNames.length - 6} more`;
 

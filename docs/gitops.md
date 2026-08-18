@@ -9,6 +9,19 @@ Monitor a Git repository and run commands when files change. Runs on its own int
 3. If `GITOPS_WATCH_PATHS` is set, only matching file changes trigger commands.
 4. Configured commands are executed in the cloned repo's directory.
 
+The global `GITOPS_COMMANDS` run **once per matching change**. When no
+monitored container consumes the global repo at all, ContainrDog runs in a pure
+*GitOps-only* mode — `AUTO_UPDATE=false`, `LABELED=true` with nothing labelled —
+and a commit to the watched paths is the sole trigger for a deploy command
+(e.g. `helm upgrade`, `kubectl apply`, a custom deploy CLI). If consumers do
+exist, the global commands run only when a change affects at least one of them,
+and are skipped when *every* affected container brings its own
+`containrdog.gitops-commands`.
+
+Note: without `GITOPS_WATCH_PATHS`, GitOps runs in interval mode and the
+commands execute on **every** `GITOPS_POLL_INTERVAL` — including in GitOps-only
+mode — so keep them idempotent or set watch paths.
+
 ## Basic Setup
 
 ```yaml
@@ -128,6 +141,16 @@ GITOPS_WATCH_PATHS='["docker-compose.yml", ".env*", "config/**"]'
 ```
 
 ## Common Patterns
+
+**GitOps-only deploys (no registry-driven image updates):**
+```yaml
+- AUTO_UPDATE=false
+- LABELED=true                     # nothing labelled -> nothing auto-updated
+- GITOPS_WATCH_PATHS=["envs/prod.json", "charts/values/**"]
+- GITOPS_COMMANDS=["cd kubernetes && kubed deploy up --env prod"]
+```
+Git is the source of truth; ContainrDog just runs the deploy command when a
+watched file lands on the branch.
 
 **Auto-deploy docker-compose on change:**
 ```yaml

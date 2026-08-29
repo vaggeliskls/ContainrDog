@@ -140,24 +140,37 @@ export class MonitorService {
       this.updateCheckExecuting = true;
       StatusStore.instance.setCheckInProgress(true);
 
-      // Hard upper bound on the whole cycle so the executing flag always
-      // releases. Without this, any unforeseen hang below (registry, runtime
-      // client, etc.) leaves the flag stuck and every subsequent tick is
-      // skipped — see prod incident 2026-05-15 where the flag stayed true
-      // for 4+ hours.
-      const cycleBudgetMs = Math.min(Math.max(2 * getConfig().interval, 60_000), 300_000);
-      let cycleTimer: NodeJS.Timeout | undefined;
-      const cycleTimeout = new Promise<never>((_, reject) => {
-        cycleTimer = setTimeout(
-          () => reject(new Error(`update check cycle exceeded ${cycleBudgetMs}ms budget`)),
-          cycleBudgetMs
-        );
-      });
-
       try {
-        await Promise.race([this.executeUpdateCheck(), cycleTimeout]);
+        // Hard upper bound on DETECTION (scan + registry checks) so the
+        // executing flag always releases. Without this, an unforeseen hang
+        // (registry, runtime client, etc.) leaves the flag stuck and every
+        // subsequent tick is skipped — see prod incident 2026-05-15 where the
+        // flag stayed true for 4+ hours.
+        //
+        // Update HANDLING is deliberately outside this budget: waiting for a
+        // rollout legitimately takes minutes (healthCheckTimeout), which has
+        // nothing to do with the check interval. Each update gets its own
+        // watchdog in handleDetectedUpdates instead.
+        const cycleBudgetMs = Math.min(Math.max(2 * getConfig().interval, 60_000), 300_000);
+        let cycleTimer: NodeJS.Timeout | undefined;
+        const cycleTimeout = new Promise<never>((_, reject) => {
+          cycleTimer = setTimeout(
+            () => reject(new Error(`update detection exceeded ${cycleBudgetMs}ms budget`)),
+            cycleBudgetMs
+          );
+        });
+
+        let detection: { containers: ContainerInfo[]; updates: ImageUpdateInfo[] } | undefined;
+        try {
+          detection = await Promise.race([this.detectUpdates(), cycleTimeout]);
+        } finally {
+          if (cycleTimer) clearTimeout(cycleTimer);
+        }
+
+        if (detection && detection.updates.length > 0) {
+          await this.handleDetectedUpdates(detection.containers, detection.updates);
+        }
       } finally {
-        if (cycleTimer) clearTimeout(cycleTimer);
         this.updateCheckExecuting = false;
         StatusStore.instance.setCheckInProgress(false);
       }
@@ -166,12 +179,17 @@ export class MonitorService {
     }
   }
 
-  private async executeUpdateCheck(): Promise<void> {
+  /**
+   * Scan the runtime and registries for available updates. Runs under the
+   * cycle budget — everything here should complete in seconds; a hang means
+   * something is genuinely broken.
+   */
+  private async detectUpdates(): Promise<{ containers: ContainerInfo[]; updates: ImageUpdateInfo[] }> {
     const containers = await this.runtimeClient.getRunningContainers();
 
     if (containers.length === 0) {
       logger.info('🔍 No containers found to monitor');
-      return;
+      return { containers, updates: [] };
     }
 
     // Initial snapshot so the dashboard shows components (and their health)
@@ -195,19 +213,54 @@ export class MonitorService {
     const updateById = new Map(updates.map((u) => [u.container.id, u]));
     StatusStore.instance.setContainers(containers, updateById);
 
-    if (updates.length === 0) {
-      if (this.webhookService) {
-        await this.webhookService.sendCheckNotification(containers.length, 0);
-      }
-      return;
+    if (updates.length === 0 && this.webhookService) {
+      await this.webhookService.sendCheckNotification(containers.length, 0);
     }
 
+    return { containers, updates };
+  }
+
+  /**
+   * Apply the detected updates sequentially, outside the cycle budget. Every
+   * step of an update is already self-bounded (command exec timeout, rollout
+   * healthCheckTimeout, API calls), so a per-update watchdog sized from those
+   * bounds protects the executing flag from an unforeseen hang without
+   * cutting short legitimate rollout waits.
+   */
+  private async handleDetectedUpdates(
+    containers: ContainerInfo[],
+    updates: ImageUpdateInfo[]
+  ): Promise<void> {
     logger.info('═══════════════════════════════════════════════════════════════');
     logger.info(`🆕 Found ${updates.length} update(s) available`);
     logger.info('═══════════════════════════════════════════════════════════════');
 
+    const updateCfg = getConfig().update;
+    const perUpdateBudgetMs =
+      (updateCfg.healthCheckEnabled ? updateCfg.healthCheckTimeout : 0) + 300_000;
+
     for (const update of updates) {
-      await this.handleUpdate(update);
+      let updateTimer: NodeJS.Timeout | undefined;
+      const updateTimeout = new Promise<never>((_, reject) => {
+        updateTimer = setTimeout(
+          () =>
+            reject(
+              new Error(
+                `update of ${update.container.name} exceeded ${perUpdateBudgetMs}ms budget`
+              )
+            ),
+          perUpdateBudgetMs
+        );
+      });
+
+      try {
+        // handleUpdate catches its own errors; only the watchdog rejects here.
+        await Promise.race([this.handleUpdate(update), updateTimeout]);
+      } catch (error) {
+        logger.error(`❌ ${error instanceof Error ? error.message : error} — continuing with next update`);
+      } finally {
+        if (updateTimer) clearTimeout(updateTimer);
+      }
       logger.info('───────────────────────────────────────────────────────────────');
     }
 

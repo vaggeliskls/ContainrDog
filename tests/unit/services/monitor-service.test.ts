@@ -3,9 +3,11 @@ import { MonitorService } from '../../../src/services/monitor-service';
 import { IRuntimeClient } from '../../../src/services/runtime-client';
 import { ContainerInfo, ImageInfo, ImageUpdateInfo, UpdateType } from '../../../src/types';
 import { ImageParser } from '../../../src/utils/image-parser';
+import { logger } from '../../../src/utils/logger';
 
 // Config with auto-update on, no webhook/gitops, and a long failure cooldown.
 const baseConfig = {
+  interval: 60_000,
   autoUpdate: true,
   webhook: undefined,
   gitops: undefined,
@@ -130,6 +132,88 @@ describe('MonitorService failure cooldown', () => {
 
     expect(client.updateContainerImage).toHaveBeenCalledTimes(2);
     baseConfig.update.failureCooldown = 3_600_000; // restore for other tests
+  });
+});
+
+describe('MonitorService cycle budget', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // Wire a monitor whose detection immediately reports the given updates and
+  // whose runtime update behavior is controlled by updateImpl.
+  function makeMonitor(
+    updates: ImageUpdateInfo[],
+    updateImpl: (id: string, image: string) => Promise<void>
+  ) {
+    const client = makeRuntimeClient(updateImpl);
+    (client.getRunningContainers as ReturnType<typeof vi.fn>).mockResolvedValue(
+      updates.map((u) => u.container)
+    );
+    const monitor = new MonitorService(client) as any;
+    monitor.updateChecker = { checkForUpdates: vi.fn().mockResolvedValue(updates) };
+    return { monitor, client };
+  }
+
+  function loggedErrors(): string {
+    return vi
+      .mocked(logger.error)
+      .mock.calls.flat()
+      .map((a) => String(a))
+      .join(' ');
+  }
+
+  it('a rollout wait longer than the detection budget is NOT killed', async () => {
+    // interval 60s -> detection budget 120s; the update takes 200s.
+    const { monitor, client } = makeMonitor(
+      [makeUpdate('1.0.0', '2.0.0')],
+      () => new Promise((resolve) => setTimeout(resolve, 200_000))
+    );
+
+    const run = monitor.runCheck();
+    await vi.advanceTimersByTimeAsync(250_000);
+    await run;
+
+    expect(client.updateContainerImage).toHaveBeenCalledTimes(1);
+    expect(loggedErrors()).not.toContain('budget');
+    expect(monitor.updateCheckExecuting).toBe(false);
+  });
+
+  it('a hung detection is still killed by the budget and releases the flag', async () => {
+    const { monitor } = makeMonitor([makeUpdate('1.0.0', '2.0.0')], () => Promise.resolve());
+    monitor.updateChecker = { checkForUpdates: vi.fn(() => new Promise(() => {})) }; // hangs
+
+    const run = monitor.runCheck();
+    await vi.advanceTimersByTimeAsync(120_000); // budget = 2 * 60s interval
+    await run;
+
+    expect(loggedErrors()).toContain('detection exceeded');
+    expect(monitor.updateCheckExecuting).toBe(false);
+  });
+
+  it('a hung update is abandoned by its own watchdog and the next update still runs', async () => {
+    const first = makeUpdate('1.0.0', '2.0.0');
+    const second = makeUpdate('1.0.0', '2.0.0');
+    second.container = { ...second.container, id: 'cid-2', name: 'web2' };
+
+    const attempted: string[] = [];
+    const { monitor } = makeMonitor([first, second], (id) => {
+      attempted.push(id);
+      return id === 'cid-1' ? new Promise(() => {}) : Promise.resolve(); // first hangs forever
+    });
+
+    const run = monitor.runCheck();
+    // per-update budget = healthCheckTimeout (30s) + 300s margin = 330s
+    await vi.advanceTimersByTimeAsync(340_000);
+    await run;
+
+    expect(attempted).toEqual(['cid-1', 'cid-2']);
+    expect(loggedErrors()).toContain('exceeded');
+    expect(monitor.updateCheckExecuting).toBe(false);
   });
 });
 

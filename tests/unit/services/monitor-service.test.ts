@@ -203,7 +203,7 @@ describe('MonitorService GitOps triggers', () => {
 
   it('dispatches global commands to all consumers (run mode)', async () => {
     const monitor = new MonitorService(clientWithContainers([gitopsContainer()])) as any;
-    monitor.gitService = {}; // pretend global GitOps is enabled
+    monitor.gitService = { isInitialized: () => true }; // pretend global GitOps is enabled
     monitor.dispatchGlobalGitOps = vi.fn().mockResolvedValue(undefined);
 
     const res = await monitor.triggerGlobalGitOps('run', false);
@@ -214,7 +214,7 @@ describe('MonitorService GitOps triggers', () => {
 
   it('reports noop for a global run with no consumers', async () => {
     const monitor = new MonitorService(clientWithContainers([])) as any;
-    monitor.gitService = {};
+    monitor.gitService = { isInitialized: () => true };
     monitor.dispatchGlobalGitOps = vi.fn().mockResolvedValue(undefined);
 
     const res = await monitor.triggerGlobalGitOps('run', false);
@@ -256,6 +256,7 @@ describe('MonitorService GitOps-only mode (global commands, no monitored contain
   it('runs global commands on a watched change even when no containers are monitored', async () => {
     const monitor = new MonitorService(clientWithContainers([])) as any;
     monitor.gitService = {
+      isInitialized: () => true,
       shouldRunOnInterval: () => false,
       checkForChanges: vi.fn().mockResolvedValue(change),
     };
@@ -273,6 +274,7 @@ describe('MonitorService GitOps-only mode (global commands, no monitored contain
     const consumer = gitopsContainer({ gitopsWatchPaths: ['other/**'] });
     const monitor = new MonitorService(clientWithContainers([consumer])) as any;
     monitor.gitService = {
+      isInitialized: () => true,
       shouldRunOnInterval: () => false,
       checkForChanges: vi.fn().mockResolvedValue(change),
     };
@@ -286,6 +288,7 @@ describe('MonitorService GitOps-only mode (global commands, no monitored contain
 
   it('manual check runs global commands in GitOps-only mode and stays quiet with unaffected consumers', async () => {
     const gitService = {
+      isInitialized: () => true,
       shouldRunOnInterval: () => false,
       checkForChanges: vi.fn().mockResolvedValue(change),
       pull: vi.fn().mockResolvedValue(undefined),
@@ -320,12 +323,158 @@ describe('MonitorService GitOps-only mode (global commands, no monitored contain
 
   it('manual global run executes global commands with no consumers', async () => {
     const monitor = new MonitorService(clientWithContainers([])) as any;
-    monitor.gitService = {};
+    monitor.gitService = { isInitialized: () => true };
     monitor.executeGlobalGitOpsCommands = vi.fn().mockResolvedValue(undefined);
 
     const res = await monitor.triggerGlobalGitOps('run', false);
 
     expect(monitor.executeGlobalGitOpsCommands).toHaveBeenCalledTimes(1);
     expect(res).toMatchObject({ code: 'ok', triggered: true, affected: [] });
+  });
+});
+describe('MonitorService global GitOps repository init retry', () => {
+  const gitopsConfig = {
+    enabled: true,
+    repoUrl: 'git@github.com:acme/deploy.git',
+    branch: 'main',
+    pollInterval: 60_000,
+    watchPaths: ['k8s/**'],
+    commands: ['echo deploy'],
+    clonePath: '',
+    quietMode: false,
+  };
+  const change = {
+    changedFiles: ['k8s/env.json'],
+    previousCommit: 'a',
+    currentCommit: 'b',
+    commitMessage: 'promote',
+    timestamp: new Date(0),
+  };
+
+  // A GitService stub whose initialize() fails `failures` times before it
+  // succeeds, mirroring a clone that cannot resolve the git host at startup.
+  function flakyGitService(failures: number) {
+    let initialized = false;
+    let attempts = 0;
+    return {
+      attempts: () => attempts,
+      isInitialized: () => initialized,
+      getLastInitError: () => (initialized ? null : 'ssh: Could not resolve hostname github.com'),
+      initialize: vi.fn(async () => {
+        attempts++;
+        initialized = attempts > failures;
+        return initialized;
+      }),
+      shouldRunOnInterval: () => false,
+      checkForChanges: vi.fn().mockResolvedValue(change),
+      pull: vi.fn().mockResolvedValue(undefined),
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (baseConfig as any).gitops = gitopsConfig;
+  });
+
+  afterEach(() => {
+    (baseConfig as any).gitops = undefined;
+  });
+
+  it('keeps the global GitService when the initial clone fails', async () => {
+    const monitor = new MonitorService(clientWithContainers([])) as any;
+    const gitService = flakyGitService(1);
+    monitor.gitService = gitService;
+
+    const ok = await monitor.initialize();
+
+    expect(ok).toBe(true); // the monitor itself still starts
+    expect(monitor.gitService).toBe(gitService); // ...and GitOps is NOT dropped
+    expect(gitService.initialize).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries the clone on each poll and resumes change detection once it succeeds', async () => {
+    const monitor = new MonitorService(clientWithContainers([])) as any;
+    const gitService = flakyGitService(2);
+    monitor.gitService = gitService;
+    monitor.executeGlobalGitOpsCommands = vi.fn().mockResolvedValue(undefined);
+
+    await monitor.initialize(); // attempt 1 fails
+
+    monitor.lastGitopsCheck = 0;
+    await monitor.checkGitOpsChanges(); // attempt 2 fails -> no change check
+    expect(gitService.checkForChanges).not.toHaveBeenCalled();
+    expect(monitor.executeGlobalGitOpsCommands).not.toHaveBeenCalled();
+
+    monitor.lastGitopsCheck = 0;
+    await monitor.checkGitOpsChanges(); // attempt 3 succeeds -> normal flow
+    expect(gitService.initialize).toHaveBeenCalledTimes(3);
+    expect(gitService.checkForChanges).toHaveBeenCalledTimes(1);
+    expect(monitor.executeGlobalGitOpsCommands).toHaveBeenCalledWith([], change);
+
+    monitor.lastGitopsCheck = 0;
+    await monitor.checkGitOpsChanges(); // initialized: no further init attempts
+    expect(gitService.initialize).toHaveBeenCalledTimes(3);
+  });
+
+  it('respects the poll interval while the repository is unavailable', async () => {
+    const monitor = new MonitorService(clientWithContainers([])) as any;
+    const gitService = flakyGitService(Number.MAX_SAFE_INTEGER);
+    monitor.gitService = gitService;
+
+    monitor.lastGitopsCheck = 0;
+    await monitor.checkGitOpsChanges(); // retries (interval elapsed)
+    await monitor.checkGitOpsChanges(); // interval not elapsed -> no retry
+
+    expect(gitService.initialize).toHaveBeenCalledTimes(1);
+  });
+
+  it('notifies once on the first failure and once on recovery', async () => {
+    const monitor = new MonitorService(clientWithContainers([])) as any;
+    const gitService = flakyGitService(3);
+    monitor.gitService = gitService;
+    monitor.executeGlobalGitOpsCommands = vi.fn().mockResolvedValue(undefined);
+    const sendGitOpsRepoNotification = vi.fn().mockResolvedValue(undefined);
+    monitor.webhookService = { sendGitOpsRepoNotification };
+
+    for (let i = 0; i < 5; i++) {
+      monitor.lastGitopsCheck = 0;
+      await monitor.checkGitOpsChanges();
+    }
+
+    expect(sendGitOpsRepoNotification).toHaveBeenCalledTimes(2);
+    expect(sendGitOpsRepoNotification).toHaveBeenNthCalledWith(
+      1,
+      gitopsConfig.repoUrl,
+      gitopsConfig.branch,
+      false,
+      'ssh: Could not resolve hostname github.com',
+      1
+    );
+    expect(sendGitOpsRepoNotification).toHaveBeenNthCalledWith(
+      2,
+      gitopsConfig.repoUrl,
+      gitopsConfig.branch,
+      true,
+      undefined,
+      3
+    );
+  });
+
+  it('reports an error for manual global triggers while the repository is unavailable', async () => {
+    const monitor = new MonitorService(clientWithContainers([])) as any;
+    const gitService = flakyGitService(1);
+    monitor.gitService = gitService;
+    monitor.executeGlobalGitOpsCommands = vi.fn().mockResolvedValue(undefined);
+
+    const failed = await monitor.triggerGlobalGitOps('check', false);
+    expect(failed.triggered).toBe(false);
+    expect(failed.code).toBe('error');
+    expect(failed.message).toContain('not initialized');
+    expect(gitService.checkForChanges).not.toHaveBeenCalled();
+
+    // The trigger itself is a retry: the next one finds the repo ready.
+    const ok = await monitor.triggerGlobalGitOps('check', false);
+    expect(ok.code).toBe('ok');
+    expect(gitService.checkForChanges).toHaveBeenCalledTimes(1);
   });
 });

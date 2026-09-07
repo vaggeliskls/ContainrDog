@@ -72,7 +72,10 @@ export class MonitorService {
   // poll interval instead of disabling GitOps for the life of the process.
   private globalGitInitFailures: number = 0;
   private updateCheckExecuting: boolean = false; // Track if update check is running
-  private lastMonitoredContainerIds: string = ''; // Track last seen container set for change detection
+  // Last seen monitored container set (sorted ids). null = nothing checked
+  // yet; '' = checked and found nothing. Used to log the set only when it
+  // changes instead of on every interval.
+  private lastMonitoredContainerIds: string | null = null;
   // After a failed auto-update, suppress re-attempts of the SAME target image
   // for a cooldown window. Without this, a crash-looping new image (or an old
   // image an external supervisor keeps recreating) is re-detected every cycle,
@@ -174,7 +177,15 @@ export class MonitorService {
     const containers = await this.runtimeClient.getRunningContainers();
 
     if (containers.length === 0) {
-      logger.info('🔍 No containers found to monitor');
+      // Say it once when the set becomes empty (or on the first check), then
+      // stay quiet: in GitOps-only setups this is the steady state and an
+      // info line every interval buries the lines that matter.
+      if (this.lastMonitoredContainerIds !== '') {
+        this.lastMonitoredContainerIds = '';
+        logger.info('🔍 No containers found to monitor (will report again when this changes)');
+      } else {
+        logger.debug('🔍 No containers found to monitor');
+      }
       return;
     }
 

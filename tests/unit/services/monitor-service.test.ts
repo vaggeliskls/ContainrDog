@@ -478,3 +478,47 @@ describe('MonitorService global GitOps repository init retry', () => {
     expect(gitService.checkForChanges).toHaveBeenCalledTimes(1);
   });
 });
+describe('MonitorService monitored-set logging', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('logs the empty monitored set once, then only at debug level', async () => {
+    const { logger } = await import('../../../src/utils/logger');
+    const monitor = new MonitorService(clientWithContainers([])) as any;
+
+    await monitor.executeUpdateCheck();
+    await monitor.executeUpdateCheck();
+    await monitor.executeUpdateCheck();
+
+    const infoNoContainers = (logger.info as any).mock.calls.filter((c: any[]) =>
+      String(c[0]).includes('No containers found to monitor')
+    );
+    const debugNoContainers = (logger.debug as any).mock.calls.filter((c: any[]) =>
+      String(c[0]).includes('No containers found to monitor')
+    );
+    expect(infoNoContainers).toHaveLength(1);
+    expect(debugNoContainers).toHaveLength(2);
+  });
+
+  it('reports again at info level when the set goes non-empty and back to empty', async () => {
+    const { logger } = await import('../../../src/utils/logger');
+    const client = clientWithContainers([]);
+    const monitor = new MonitorService(client) as any;
+    monitor.updateChecker = { checkForUpdates: vi.fn().mockResolvedValue([]) };
+
+    await monitor.executeUpdateCheck(); // empty -> info
+    (client.getRunningContainers as any).mockResolvedValueOnce([gitopsContainer()]);
+    await monitor.executeUpdateCheck(); // one container -> "Monitoring 1 container(s)"
+    await monitor.executeUpdateCheck(); // empty again -> info
+
+    const infoNoContainers = (logger.info as any).mock.calls.filter((c: any[]) =>
+      String(c[0]).includes('No containers found to monitor')
+    );
+    const monitoring = (logger.info as any).mock.calls.filter((c: any[]) =>
+      String(c[0]).includes('Monitoring 1 container(s)')
+    );
+    expect(infoNoContainers).toHaveLength(2);
+    expect(monitoring).toHaveLength(1);
+  });
+});

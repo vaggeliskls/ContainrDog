@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.11.1](https://github.com/vaggeliskls/ContainrDog/compare/0.11.0...0.11.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **gitops:** retry repository initialization instead of disabling GitOps after a failed clone ([dc4f81e](https://github.com/vaggeliskls/ContainrDog/commit/dc4f81e7cc1b88581f7d597af60d7e65d13910fe))
+* **gitops:** retry repository initialization instead of disabling GitOps after a failed clone ([027b5db](https://github.com/vaggeliskls/ContainrDog/commit/027b5dba3d0eec1733056af8ddf0f3d7f97d686f))
+* **monitor:** log the empty monitored set once instead of every interval ([ef25bd1](https://github.com/vaggeliskls/ContainrDog/commit/ef25bd1e38ff215abcf119f5c8d3fb57c1c46af3))
+
 ## [0.11.0](https://github.com/vaggeliskls/ContainrDog/compare/0.10.1...0.11.0) (2026-08-18)
 
 

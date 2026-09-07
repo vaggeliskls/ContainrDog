@@ -1,6 +1,6 @@
 import simpleGit, { SimpleGit, SimpleGitOptions } from 'simple-git';
 import { minimatch } from 'minimatch';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, rmSync } from 'fs';
 import { access, stat } from 'fs/promises';
 import { constants as fsConstants } from 'fs';
 import { logger } from '../utils/logger';
@@ -10,6 +10,8 @@ export class GitService {
   private git: SimpleGit;
   private config: GitOpsConfig;
   private lastCommit: string | null = null;
+  private initialized: boolean = false;
+  private lastInitError: string | null = null;
 
   constructor(config: GitOpsConfig) {
     this.config = config;
@@ -41,7 +43,24 @@ export class GitService {
   }
 
   /**
-   * Initialize the repository - clone if not exists, otherwise pull
+   * Whether the working tree is cloned and ready. False until initialize()
+   * succeeds -- a failed clone (cluster DNS not answering yet, SSH key not
+   * mounted, transient network error) leaves the service uninitialized and
+   * the caller is expected to call initialize() again later.
+   */
+  isInitialized(): boolean {
+    return this.initialized;
+  }
+
+  /** Message of the last failed initialize() attempt, or null. */
+  getLastInitError(): string | null {
+    return this.lastInitError;
+  }
+
+  /**
+   * Initialize the repository - clone if not exists, otherwise pull.
+   * Safe to call repeatedly: returns false on failure without side effects,
+   * so the caller can retry on its next interval.
    */
   async initialize(): Promise<boolean> {
     try {
@@ -72,10 +91,14 @@ export class GitService {
       // Store initial commit
       const log = await this.git.log(['-1']);
       this.lastCommit = log.latest?.hash || null;
+      this.initialized = true;
+      this.lastInitError = null;
       logger.info(`🔄 GitOps: Initialized at commit ${this.lastCommit?.substring(0, 7)}`);
 
       return true;
     } catch (error) {
+      this.initialized = false;
+      this.lastInitError = error instanceof Error ? error.message : String(error);
       logger.error('❌ GitOps: Failed to initialize repository:', error);
       return false;
     }
@@ -91,7 +114,15 @@ export class GitService {
     if (this.config.shallow) {
       args.push('--depth', '1');
     }
-    await this.git.clone(repoUrl, this.config.clonePath, args);
+    try {
+      await this.git.clone(repoUrl, this.config.clonePath, args);
+    } catch (error) {
+      // git normally cleans up after a failed clone, but make sure no partial
+      // .git is left behind: a later initialize() would otherwise take the
+      // "already exists, pull" path against a broken checkout.
+      rmSync(`${this.config.clonePath}/.git`, { recursive: true, force: true });
+      throw error;
+    }
 
     logger.info(`✅ GitOps: Repository cloned successfully${this.config.shallow ? ' (shallow)' : ''}`);
   }

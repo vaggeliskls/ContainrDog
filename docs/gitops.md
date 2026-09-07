@@ -22,6 +22,24 @@ Note: without `GITOPS_WATCH_PATHS`, GitOps runs in interval mode and the
 commands execute on **every** `GITOPS_POLL_INTERVAL` — including in GitOps-only
 mode — so keep them idempotent or set watch paths.
 
+### Startup and repository failures
+
+The repository is cloned when ContainrDog starts. If that first clone fails —
+typically because the container came up before cluster DNS could resolve the
+git host, or because the SSH key / token is not mounted yet — GitOps is **not**
+disabled. ContainrDog keeps running, retries the clone on every
+`GITOPS_POLL_INTERVAL`, and resumes change detection as soon as it succeeds.
+
+- The first failed attempt sends a webhook notification (when
+  `WEBHOOK_NOTIFY_GITOPS_FAILURE` is on) so a paused watcher is visible
+  immediately, and a second one is sent when the repository recovers.
+- Manual triggers (`POST /api/gitops/trigger`) return `code: "error"` with the
+  clone error while the repository is unavailable; each trigger also retries
+  the clone.
+- Once the clone succeeds, monitoring starts from the branch HEAD at that
+  moment: commits pushed during the outage are not replayed. Trigger a run
+  manually (`POST /api/gitops/trigger?mode=run`) if a deploy was missed.
+
 ## Basic Setup
 
 ```yaml

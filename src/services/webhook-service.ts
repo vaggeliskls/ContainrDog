@@ -79,6 +79,31 @@ export class WebhookService {
     }
   }
 
+  /**
+   * Repository-level GitOps notification: the clone/initialization of the
+   * global GitOps repo failed (GitOps is effectively paused until it
+   * succeeds) or recovered after earlier failures. Both directions are gated
+   * on notifyOnGitopsFailure -- the recovery message closes the alert opened
+   * by the failure, so it follows the same switch.
+   */
+  async sendGitOpsRepoNotification(
+    repoUrl: string,
+    branch: string,
+    success: boolean,
+    error?: string,
+    attempts?: number
+  ): Promise<void> {
+    try {
+      if (!this.config.notifyOnGitopsFailure) return;
+
+      const payload = this.buildGitOpsRepoPayload(repoUrl, branch, success, error, attempts);
+      await this.axiosInstance.post(this.config.url, payload);
+      logger.debug('📨 Webhook GitOps repository notification sent successfully');
+    } catch (err) {
+      logger.warn(`⚠️  Failed to send webhook GitOps repository notification: ${err}`);
+    }
+  }
+
   async sendCheckNotification(containersChecked: number, updatesFound: number): Promise<void> {
     try {
       if (!this.config.notifyOnCheck) {
@@ -517,6 +542,90 @@ export class WebhookService {
             name: c.name,
             image: c.image,
           })),
+          error: error || null,
+        };
+    }
+  }
+
+  private buildGitOpsRepoPayload(
+    repoUrl: string,
+    branch: string,
+    success: boolean,
+    error?: string,
+    attempts?: number
+  ): Record<string, unknown> {
+    const title = success ? 'GitOps repository recovered' : 'GitOps repository unavailable';
+    const emoji = success ? '✅' : '❌';
+    const detail = success
+      ? `Repository initialized${attempts ? ` after ${attempts} failed attempt(s)` : ''}; GitOps monitoring resumed.`
+      : 'Clone/initialization failed. GitOps is paused until it succeeds; retrying on every poll interval.';
+
+    switch (this.config.provider) {
+      case WebhookProvider.SLACK:
+        return {
+          text: `${emoji} ContainrDog: ${title}`,
+          attachments: [
+            {
+              color: success ? 'good' : 'danger',
+              fields: [
+                { title: 'Repository', value: repoUrl, short: false },
+                { title: 'Branch', value: branch, short: true },
+                { title: 'Status', value: success ? 'Recovered' : 'Failed', short: true },
+                { title: 'Detail', value: detail, short: false },
+                ...(error ? [{ title: 'Error', value: error, short: false }] : []),
+              ],
+              footer: '🐾 ContainrDog',
+              ts: Math.floor(Date.now() / 1000),
+            },
+          ],
+        };
+
+      case WebhookProvider.DISCORD:
+        return {
+          embeds: [
+            {
+              title: `${emoji} ContainrDog: ${title}`,
+              color: success ? 0x00ff00 : 0xff0000,
+              fields: [
+                { name: 'Repository', value: repoUrl, inline: false },
+                { name: 'Branch', value: branch, inline: true },
+                { name: 'Status', value: success ? 'Recovered' : 'Failed', inline: true },
+                { name: 'Detail', value: detail, inline: false },
+                ...(error ? [{ name: 'Error', value: error, inline: false }] : []),
+              ],
+              footer: { text: '🐾 ContainrDog' },
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        };
+
+      case WebhookProvider.TEAMS:
+        return {
+          '@type': 'MessageCard',
+          '@context': 'https://schema.org/extensions',
+          summary: `${emoji} ContainrDog: ${title}`,
+          themeColor: success ? '00FF00' : 'FF0000',
+          title: `${emoji} ContainrDog: ${title}`,
+          sections: [
+            {
+              facts: [
+                { name: 'Repository', value: repoUrl },
+                { name: 'Branch', value: branch },
+                { name: 'Status', value: success ? 'Recovered' : 'Failed' },
+                { name: 'Detail', value: detail },
+                ...(error ? [{ name: 'Error', value: error }] : []),
+              ],
+            },
+          ],
+        };
+
+      default:
+        return {
+          event: 'gitops_repository',
+          status: success ? 'recovered' : 'failed',
+          timestamp: new Date().toISOString(),
+          repository: { url: repoUrl, branch },
+          attempts: attempts ?? null,
           error: error || null,
         };
     }

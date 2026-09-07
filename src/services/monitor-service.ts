@@ -66,8 +66,16 @@ export class MonitorService {
   private lastGitopsCheck: number = 0;
   private gitopsExecuting: Set<string> = new Set(); // Track executing GitOps operations
   private globalGitopsExecuting: boolean = false; // Track global GitOps execution
+  // Consecutive failed attempts to clone/initialize the global GitOps repo.
+  // The first failure (typically at startup, before cluster DNS answers) and
+  // the eventual recovery are reported via webhook; retries happen on every
+  // poll interval instead of disabling GitOps for the life of the process.
+  private globalGitInitFailures: number = 0;
   private updateCheckExecuting: boolean = false; // Track if update check is running
-  private lastMonitoredContainerIds: string = ''; // Track last seen container set for change detection
+  // Last seen monitored container set (sorted ids). null = nothing checked
+  // yet; '' = checked and found nothing. Used to log the set only when it
+  // changes instead of on every interval.
+  private lastMonitoredContainerIds: string | null = null;
   // After a failed auto-update, suppress re-attempts of the SAME target image
   // for a cooldown window. Without this, a crash-looping new image (or an old
   // image an external supervisor keeps recreating) is re-detected every cycle,
@@ -114,10 +122,9 @@ export class MonitorService {
       logger.info('🐾 Successfully connected to container runtime');
 
       if (this.gitService) {
-        const gitInitialized = await this.gitService.initialize();
+        const gitInitialized = await this.ensureGlobalGitOpsReady();
         if (!gitInitialized) {
-          logger.warn('⚠️  GitOps initialization failed, continuing without GitOps');
-          this.gitService = undefined;
+          logger.warn('⚠️  GitOps initialization failed, will keep retrying on every poll interval');
         }
       }
 
@@ -170,7 +177,15 @@ export class MonitorService {
     const containers = await this.runtimeClient.getRunningContainers();
 
     if (containers.length === 0) {
-      logger.info('🔍 No containers found to monitor');
+      // Say it once when the set becomes empty (or on the first check), then
+      // stay quiet: in GitOps-only setups this is the steady state and an
+      // info line every interval buries the lines that matter.
+      if (this.lastMonitoredContainerIds !== '') {
+        this.lastMonitoredContainerIds = '';
+        logger.info('🔍 No containers found to monitor (will report again when this changes)');
+      } else {
+        logger.debug('🔍 No containers found to monitor');
+      }
       return;
     }
 
@@ -371,7 +386,9 @@ export class MonitorService {
           this.globalGitopsExecuting = true;
 
           try {
-            if (this.gitService.shouldRunOnInterval()) {
+            if (!(await this.ensureGlobalGitOpsReady())) {
+              // Clone still failing (e.g. no DNS yet); retried next interval.
+            } else if (this.gitService.shouldRunOnInterval()) {
               logger.info('📦 GitOps (Global): Running interval-based commands (no watch paths)');
 
               const affectedContainers = containers.filter((container) => {
@@ -943,6 +960,53 @@ export class MonitorService {
   }
 
   /**
+   * Make sure the global GitOps repository is cloned, (re)trying the
+   * initialization if a previous attempt failed. Returns false when the repo
+   * is still unavailable; callers skip this cycle and try again later.
+   *
+   * A failed initial clone used to disable GitOps permanently. That silently
+   * turned a transient startup error (cluster DNS not ready on a fresh node,
+   * short network blip) into a watcher that never deploys again until the
+   * pod is restarted -- with the container Running and Ready, nothing
+   * flagged it. Now the first failure and the recovery are notified and the
+   * clone is retried on every poll.
+   */
+  private async ensureGlobalGitOpsReady(): Promise<boolean> {
+    if (!this.gitService) return false;
+    if (this.gitService.isInitialized()) return true;
+
+    const config = getConfig();
+    const repoUrl = config.gitops?.repoUrl ?? 'unknown';
+    const branch = config.gitops?.branch ?? 'main';
+
+    const ok = await this.gitService.initialize();
+    if (ok) {
+      if (this.globalGitInitFailures > 0) {
+        logger.info(
+          `✅ GitOps (Global): Repository initialized after ${this.globalGitInitFailures} failed attempt(s)`
+        );
+        if (this.webhookService) {
+          await this.webhookService.sendGitOpsRepoNotification(repoUrl, branch, true, undefined, this.globalGitInitFailures);
+        }
+      }
+      this.globalGitInitFailures = 0;
+      return true;
+    }
+
+    this.globalGitInitFailures++;
+    const error = this.gitService.getLastInitError() ?? 'unknown error';
+    const retryIn = config.gitops?.pollInterval ? `${Math.round(config.gitops.pollInterval / 1000)}s` : 'next interval';
+    logger.warn(
+      `⚠️  GitOps (Global): Repository not initialized (attempt ${this.globalGitInitFailures}); retrying in ${retryIn}`
+    );
+    // Alert once per outage, not on every retry.
+    if (this.globalGitInitFailures === 1 && this.webhookService) {
+      await this.webhookService.sendGitOpsRepoNotification(repoUrl, branch, false, error, this.globalGitInitFailures);
+    }
+    return false;
+  }
+
+  /**
    * Manually trigger the GLOBAL GitOps process on demand (HTTP).
    * - mode 'run':   execute the global commands now for every global consumer.
    * - mode 'check': fetch + diff; run only on matching changes. With force,
@@ -960,6 +1024,10 @@ export class MonitorService {
 
     this.globalGitopsExecuting = true;
     try {
+      if (!(await this.ensureGlobalGitOpsReady())) {
+        return { ...base, triggered: false, code: 'error', message: this.repoNotReadyMessage() };
+      }
+
       const containers = await this.runtimeClient.getRunningContainers();
       const consumers = this.globalGitopsConsumers(containers);
       const gitopsOnly = this.isGitOpsOnlyMode(containers);
@@ -1080,6 +1148,9 @@ export class MonitorService {
       }
       this.globalGitopsExecuting = true;
       try {
+        if (!(await this.ensureGlobalGitOpsReady())) {
+          return { ...base, triggered: false, code: 'error', message: this.repoNotReadyMessage() };
+        }
         const changes = await this.gitService.checkForChanges();
         if (changes) {
           const affected = this.getAffectedContainers([container], changes, true);
@@ -1104,6 +1175,11 @@ export class MonitorService {
     } finally {
       this.gitopsExecuting.delete(container.id);
     }
+  }
+
+  private repoNotReadyMessage(): string {
+    const reason = this.gitService?.getLastInitError();
+    return `Global GitOps repository is not initialized (clone failed${reason ? `: ${reason}` : ''}); it is retried on every poll interval`;
   }
 
   async shutdown(): Promise<void> {
